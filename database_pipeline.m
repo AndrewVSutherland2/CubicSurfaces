@@ -297,3 +297,68 @@ GenerateDatabase := function(f, U, dir : PerClass := 5, GenCount := 150,
     end for;
     return rows;
 end function;
+
+/* ------------------------------------------------------------------------- */
+/* Canonical W(E6) subgroup labels (WE6subgroups.txt).                        */
+/*                                                                            */
+/* The file gives, per line "label:gens:d:t", a conjugacy class of subgroups  */
+/* of W(E6) = 27T1161 by generators in S27 (acting on the 27 lines), with the  */
+/* degree d and T-number t of the minimal transitive group isomorphic to it.   */
+/* IsIsomorphic(27T1161, we6) transports each into the 40-dimensional gamma     */
+/* representation used by the descent (this transport is the geometric one --   */
+/* checked: it agrees with the explicit 27-line action of the generators on all */
+/* 350 classes, so the W(E6) outer automorphism does not affect the labels).    */
+/* ------------------------------------------------------------------------- */
+
+LoadWE6Subgroups := function(U, filename)
+    we6 := U`we6;
+    S27 := SymmetricGroup(27);
+    S := [ Split(r, ":") : r in Split(Read(filename)) ];
+    G := [ sub<S27 | eval(r[2])> : r in S ];
+    full := [ i : i in [1..#S] | StringToInteger(S[i][3]) eq 27 and StringToInteger(S[i][4]) eq 1161 ];
+    error if not (#full ge 1), "Could not find the full W(E6) (27T1161) line in the file";
+    ok, psi := IsIsomorphic(G[full[1]], we6);
+    error if not ok, "27T1161 is not isomorphic to the 40-dimensional W(E6)";
+    subs := [];
+    for i in [1..#S] do
+        Gwe6 := sub<we6 | [ psi(g) : g in Generators(G[i]) ]>;
+        Append(~subs, < S[i][1], Gwe6, StringToInteger(S[i][3]), StringToInteger(S[i][4]) >);
+    end for;
+    return subs;
+end function;
+
+/* ------------------------------------------------------------------------- */
+/* Realize the Galois group of f on the 27 lines as cubic surfaces, labelled   */
+/* by the canonical W(E6) subgroup class.  Returns a list of <label, cubic     */
+/* form> tuples, up to n per label, the labels ranging over the W(E6) subgroup  */
+/* classes isomorphic to Gal(f).                                               */
+/* ------------------------------------------------------------------------- */
+
+RealizeCubicSurfaces := function(f, n, U, subs, dir
+        : GenCount := 150, MinimizeTop := 16, Timeout := 60, Print := true)
+    fz := IntegralMonicPolynomial(f);
+    P, rts, GalData := GaloisGroup(fz);
+    t, d := TransitiveGroupIdentification(P);
+    T := [ i : i in [1..#subs] | subs[i][3] eq d and subs[i][4] eq t ];
+    if Print then printf "Gal(f) = %oT%o; %o matching W(E6) subgroup label(s)\n", d, t, #T; end if;
+
+    gfull := GaloisSubgroup(GalData, sub<P|>);
+    Kf := NumberField(gfull); dK := Degree(gfull);
+    autos := Automorphisms(Kf);
+    rtsK := [r[1] : r in Roots(gfull, Kf)];
+    Sd := SymmetricGroup(dK);
+    perms := [ Sd ! [ Index(rtsK, au(rtsK[i])) : i in [1..dK] ] : au in autos ];
+    PK := sub<Sd|perms>;
+
+    result := [];
+    for idx in T do
+        label := subs[idx][1]; Gwe6 := subs[idx][2];
+        if Print then printf "  label %o:\n", label; end if;
+        res := BestCubicsForClass(Kf, autos, perms, PK, Gwe6, U, dir
+            : PerClass := n, GenCount := GenCount, MinimizeTop := MinimizeTop,
+              Timeout := Timeout, Print := Print);
+        for r in res do Append(~result, < label, r[1] >); end for;
+        if Print then printf "    -> %o cubic(s)\n", #res; end if;
+    end for;
+    return result;
+end function;
