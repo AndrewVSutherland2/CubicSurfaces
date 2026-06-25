@@ -231,6 +231,28 @@ max|coef|, z, Clebsch invariants, Δ_Cl, ρ⟩`. For example,
 `GenerateDatabase(t^3+t^2-2*t-1, U, dir)` returns 15 certified `C3` cubics (5 per
 class × 3 classes) in ~7 s.
 
+### Canonical `W(E6)` subgroup labels
+
+`WE6subgroups.txt` assigns a canonical label to each of the 350 conjugacy classes
+of subgroups of `W(E6) = 27T1161` (for eventual inclusion in the LMFDB), given by
+generators in `S27` (the action on the 27 lines) together with the degree `d` and
+T-number `t` of the minimal-degree transitive group isomorphic to the subgroup.
+`RealizeCubicSurfaces(f, n, U, subs, dir)` returns a list of `⟨label, cubic form⟩`
+tuples — up to `n` per label — the labels ranging over the `W(E6)` subgroup
+classes isomorphic to `Gal(f)`:
+
+```
+subs   := LoadWE6Subgroups(U, "WE6subgroups.txt");
+tuples := RealizeCubicSurfaces(t^3 + t^2 - 2*t - 1, 5, U, subs, "/tmp/cs");
+```
+
+`LoadWE6Subgroups` transports each file subgroup into the 40-dimensional gamma
+representation via `IsIsomorphic(27T1161, we6)` — verified to agree with the
+explicit 27-line action of the generators on **all 350 classes** (so the `W(E6)`
+outer automorphism does not perturb the labels). For `t^3+t^2-2t-1` this yields
+the three `C3` classes `51840.b.17280.{a1,b1,c1}.a1`, each realised by small
+certified cubics (max|coef| ≤ 8).
+
 ## Status and limitations
 
 - **The point search is resolved.** The A6 cuspidal map is dominant, so a smooth

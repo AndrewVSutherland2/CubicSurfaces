@@ -40,7 +40,7 @@ end function;
 /* size (smallest intrinsic discriminant first).                              */
 /* ------------------------------------------------------------------------- */
 
-GenerateModuliPoints := function(Kf, bm, Brho, Drho : Count := 150, HeightBound := 12, Print := false)
+GenerateModuliPoints := function(Kf, bm, Brho, Drho : Count := 150, HeightBound := 12, MaxTries := 2000, Print := false)
     cols := []; Msel := ZeroMatrix(Q, 10, 0);
     for j := 1 to 40 do
         Mtry := HorizontalJoin(Msel, Matrix(Q, 10, 1, [bm[r,j] : r in [1..10]]));
@@ -69,13 +69,20 @@ GenerateModuliPoints := function(Kf, bm, Brho, Drho : Count := 150, HeightBound 
         return true, [Q!(x div gg) : x in zz];
     end function;
 
-    seen := {}; out := [];
+    /* Enumerate u shell by shell (low height first), but lazily -- never
+       materialise a whole shell -- and stop after Count distinct moduli points or
+       MaxTries evaluations.  Some twists (e.g. the trivial group) have a low
+       distinct-rate, so the MaxTries budget is what keeps generation bounded; the
+       output is ranked by Delta_Cl afterwards, so the within-shell order is
+       irrelevant. */
+    seen := {}; out := []; tries := 0;
     for B := 1 to HeightBound do
-        shell := [ [u[i] : i in [1..6]] : u in CartesianPower([-B..B], 6) ];
-        shell := [ u : u in shell | Max([Abs(x) : x in u]) eq B and GCD(u) eq 1 ];
-        Sort(~shell, func< a, b | &+[Abs(x):x in a] - &+[Abs(x):x in b] >);
-        for u in shell do
-            okp, zq := a6(u); if not okp then continue; end if;
+        for u in CartesianPower([-B..B], 6) do
+            uu := [ u[i] : i in [1..6] ];
+            if Max([Abs(x) : x in uu]) ne B or GCD(uu) ne 1 then continue; end if;
+            tries +:= 1;
+            if tries gt MaxTries then break B; end if;
+            okp, zq := a6(uu); if not okp then continue; end if;
             ii := ClebschInvariantsConcrete(zq, Brho, Kf, bm : Print := false);
             if ii[5] eq 0 or ii[1] eq 0 then continue; end if;
             key := <ii[2]/ii[1]^2, ii[3]/ii[1]^3, ii[4]/ii[1]^4, ii[5]/ii[1]^5>;
@@ -95,7 +102,7 @@ end function;
 /* Returns [<orig_index, minimized_surface, maxcoef>] for those that finished. */
 /* ------------------------------------------------------------------------- */
 
-ParallelMinimizeReduce := function(surfaces, dir : Timeout := 60, Poll := 2, Print := false)
+ParallelMinimizeReduce := function(surfaces, dir : Timeout := 60, Poll := 2, MinResults := 0, Print := false)
     n := #surfaces;
     _ := System(Sprintf("mkdir -p %o", dir));
     _ := System(Sprintf("rm -f %o/pm_*", dir));
@@ -108,12 +115,18 @@ ParallelMinimizeReduce := function(surfaces, dir : Timeout := 60, Poll := 2, Pri
         _ := System(Sprintf("(timeout %o magma -b %o/pm_job_%o.m >/dev/null 2>&1; touch %o/pm_done_%o) &",
                             Timeout, dir, i, dir, i));
     end for;
+    /* poll: stop as soon as all jobs are done, or enough results are in (early
+       exit -- a few slow stragglers should not cost the whole timeout), or the
+       timeout elapses. */
     waited := 0;
     repeat
         _ := System(Sprintf("sleep %o", Poll));
         waited +:= Poll;
         ndone := #[ i : i in [1..n] | System(Sprintf("test -f %o/pm_done_%o", dir, i)) eq 0 ];
-    until ndone eq n or waited gt Timeout + 4*Poll + 5;
+        nres  := MinResults gt 0 select #[ i : i in [1..n] | System(Sprintf("test -s %o/pm_res_%o.txt", dir, i)) eq 0 ] else 0;
+    until ndone eq n or (MinResults gt 0 and nres ge MinResults) or waited gt Timeout + 4*Poll + 5;
+    /* free the cores: kill any minimizations still running for this batch */
+    _ := System(Sprintf("pkill -f '%o/pm_job' 2>/dev/null", dir));
     R4<x,y,z,w> := PolynomialRing(IntegerRing(), 4);
     results := [];
     for i := 1 to n do
@@ -156,7 +169,7 @@ BestCubicsForTwist := function(Kf, autos, perms, psi, U, dir
         end if;
     end while;
 
-    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, Print := Print);
+    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, MinResults := Min(#raws, PerClass + 5), Print := Print);
     /* fin : <index-into-raws, minsurf, maxcoef>; sort the finishers by Delta_Cl */
     pairs := [ <provs[t[1]][1], t> : t in fin ];   /* <DeltaClSize, <idx,surf,maxcoef>> */
     Sort(~pairs, func< a, b | a[1] - b[1] >);
@@ -252,7 +265,7 @@ BestCubicsForClass := function(Kf, autos, perms, PK, Gwe6, U, dir
         if ok and IsSmoothCubicSurface(gl) then Append(~raws, gl); Append(~provs, allmod[i-1]); end if;
     end while;
 
-    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, Print := Print);
+    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, MinResults := Min(#raws, PerClass + 5), Print := Print);
     pairs := [ <provs[t[1]][1], t> : t in fin ];
     Sort(~pairs, func< a, b | a[1] - b[1] >);
     res := [];
@@ -296,4 +309,69 @@ GenerateDatabase := function(f, U, dir : PerClass := 5, GenCount := 150,
         if Print then printf "    -> %o cubic(s)\n", #res; end if;
     end for;
     return rows;
+end function;
+
+/* ------------------------------------------------------------------------- */
+/* Canonical W(E6) subgroup labels (WE6subgroups.txt).                        */
+/*                                                                            */
+/* The file gives, per line "label:gens:d:t", a conjugacy class of subgroups  */
+/* of W(E6) = 27T1161 by generators in S27 (acting on the 27 lines), with the  */
+/* degree d and T-number t of the minimal transitive group isomorphic to it.   */
+/* IsIsomorphic(27T1161, we6) transports each into the 40-dimensional gamma     */
+/* representation used by the descent (this transport is the geometric one --   */
+/* checked: it agrees with the explicit 27-line action of the generators on all */
+/* 350 classes, so the W(E6) outer automorphism does not affect the labels).    */
+/* ------------------------------------------------------------------------- */
+
+LoadWE6Subgroups := function(U, filename)
+    we6 := U`we6;
+    S27 := SymmetricGroup(27);
+    S := [ Split(r, ":") : r in Split(Read(filename)) ];
+    G := [ sub<S27 | eval(r[2])> : r in S ];
+    full := [ i : i in [1..#S] | StringToInteger(S[i][3]) eq 27 and StringToInteger(S[i][4]) eq 1161 ];
+    error if not (#full ge 1), "Could not find the full W(E6) (27T1161) line in the file";
+    ok, psi := IsIsomorphic(G[full[1]], we6);
+    error if not ok, "27T1161 is not isomorphic to the 40-dimensional W(E6)";
+    subs := [];
+    for i in [1..#S] do
+        Gwe6 := sub<we6 | [ psi(g) : g in Generators(G[i]) ]>;
+        Append(~subs, < S[i][1], Gwe6, StringToInteger(S[i][3]), StringToInteger(S[i][4]) >);
+    end for;
+    return subs;
+end function;
+
+/* ------------------------------------------------------------------------- */
+/* Realize the Galois group of f on the 27 lines as cubic surfaces, labelled   */
+/* by the canonical W(E6) subgroup class.  Returns a list of <label, cubic     */
+/* form> tuples, up to n per label, the labels ranging over the W(E6) subgroup  */
+/* classes isomorphic to Gal(f).                                               */
+/* ------------------------------------------------------------------------- */
+
+RealizeCubicSurfaces := function(f, n, U, subs, dir
+        : GenCount := 150, MinimizeTop := 16, Timeout := 60, Print := true)
+    fz := IntegralMonicPolynomial(f);
+    P, rts, GalData := GaloisGroup(fz);
+    t, d := TransitiveGroupIdentification(P);
+    T := [ i : i in [1..#subs] | subs[i][3] eq d and subs[i][4] eq t ];
+    if Print then printf "Gal(f) = %oT%o; %o matching W(E6) subgroup label(s)\n", d, t, #T; end if;
+
+    gfull := GaloisSubgroup(GalData, sub<P|>);
+    Kf := NumberField(gfull); dK := Degree(gfull);
+    autos := Automorphisms(Kf);
+    rtsK := [r[1] : r in Roots(gfull, Kf)];
+    Sd := SymmetricGroup(dK);
+    perms := [ Sd ! [ Index(rtsK, au(rtsK[i])) : i in [1..dK] ] : au in autos ];
+    PK := sub<Sd|perms>;
+
+    result := [];
+    for idx in T do
+        label := subs[idx][1]; Gwe6 := subs[idx][2];
+        if Print then printf "  label %o:\n", label; end if;
+        res := BestCubicsForClass(Kf, autos, perms, PK, Gwe6, U, dir
+            : PerClass := n, GenCount := GenCount, MinimizeTop := MinimizeTop,
+              Timeout := Timeout, Print := Print);
+        for r in res do Append(~result, < label, r[1] >); end for;
+        if Print then printf "    -> %o cubic(s)\n", #res; end if;
+    end for;
+    return result;
 end function;
