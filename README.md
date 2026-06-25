@@ -253,6 +253,26 @@ outer automorphism does not perturb the labels). For `t^3+t^2-2t-1` this yields
 the three `C3` classes `51840.b.17280.{a1,b1,c1}.a1`, each realised by small
 certified cubics (max|coef| ≤ 8).
 
+### The seed database and its browser
+
+`seed_database.m` runs every polynomial in `WE6fields.txt` through
+`RealizeCubicSurfaces` and writes `database_seed.txt` (lines
+`label:source_coeffs:cubic`). The current seed has **902 cubic surfaces across 58
+of the 350 `W(E6)` classes** — every class of small intrinsic discriminant
+`Δ_Cl` (orders 2–12).
+
+**`seed_database.html`** is a self-contained, browsable view of the database:
+group classes (rendered names, `dTt`, order, `W(E6)` label), the source field of
+each surface, and the cubic equations rendered with KaTeX, with search and
+per-order filtering. Open the file in any browser (equations load KaTeX from a
+CDN), or serve the repository with GitHub Pages. Regenerate it after extending
+the seed with:
+
+```
+magma -b class_info.m        # -> class_info.txt  (group names for the classes)
+python3 make_seed_html.py    # -> seed_database.html
+```
+
 ## Status and limitations
 
 - **The point search is resolved.** The A6 cuspidal map is dominant, so a smooth
