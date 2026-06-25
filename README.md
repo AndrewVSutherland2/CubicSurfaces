@@ -1,5 +1,7 @@
 # CubicSurfaces
 
+> 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; 902 explicit smooth cubic surfaces over `Q` across 58 conjugacy classes of `W(E6)` subgroups: searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons.
+
 A [Magma](http://magma.maths.usyd.edu.au/) implementation of **Elsenhans–Jahnel
 Algorithm 5.1** ([arXiv:1209.5591](https://arxiv.org/abs/1209.5591), *On the
 inverse Galois problem for cubic surfaces*): given a finite group `G` realised as
