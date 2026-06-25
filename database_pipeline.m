@@ -169,7 +169,7 @@ BestCubicsForTwist := function(Kf, autos, perms, psi, U, dir
         end if;
     end while;
 
-    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, MinResults := Min(#raws, PerClass + 5), Print := Print);
+    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, MinResults := Min(#raws, PerClass + 2), Print := Print);
     /* fin : <index-into-raws, minsurf, maxcoef>; sort the finishers by Delta_Cl */
     pairs := [ <provs[t[1]][1], t> : t in fin ];   /* <DeltaClSize, <idx,surf,maxcoef>> */
     Sort(~pairs, func< a, b | a[1] - b[1] >);
@@ -235,7 +235,7 @@ end function;
 /* ------------------------------------------------------------------------- */
 
 BestCubicsForClass := function(Kf, autos, perms, PK, Gwe6, U, dir
-        : PerClass := 5, GenCount := 150, MinimizeTop := 16, Timeout := 60, Print := false)
+        : PerClass := 5, GenCount := 150, MinimizeTop := 16, Timeout := 60, MaxDeltaCl := 100000, Print := false)
     bm := U`bm;
     rhos := TwistEmbeddings(U, Gwe6, PK);
     if Print then printf "    %o distinct embedding(s) rho\n", #rhos; end if;
@@ -255,6 +255,10 @@ BestCubicsForClass := function(Kf, autos, perms, PK, Gwe6, U, dir
     Sort(~allmod, func< a, b | a[1] - b[1] >);
     if Print then printf "    %o distinct moduli points across embeddings; smallest Delta_Cl %o\n",
         #allmod, [allmod[i][1] : i in [1..Min(6,#allmod)]]; end if;
+    /* If even the smallest intrinsic discriminant Delta_Cl is large, every surface
+       in this class is badly non-minimal and minimization will only time out --
+       skip it cheaply rather than spend the minimize budget on a sure 0. */
+    if #allmod eq 0 or allmod[1][1] gt MaxDeltaCl then return []; end if;
 
     raws := []; provs := [];
     i := 1;
@@ -265,7 +269,7 @@ BestCubicsForClass := function(Kf, autos, perms, PK, Gwe6, U, dir
         if ok and IsSmoothCubicSurface(gl) then Append(~raws, gl); Append(~provs, allmod[i-1]); end if;
     end while;
 
-    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, MinResults := Min(#raws, PerClass + 5), Print := Print);
+    fin := ParallelMinimizeReduce(raws, dir : Timeout := Timeout, MinResults := Min(#raws, PerClass + 2), Print := Print);
     pairs := [ <provs[t[1]][1], t> : t in fin ];
     Sort(~pairs, func< a, b | a[1] - b[1] >);
     res := [];
@@ -348,12 +352,19 @@ end function;
 /* ------------------------------------------------------------------------- */
 
 RealizeCubicSurfaces := function(f, n, U, subs, dir
-        : GenCount := 150, MinimizeTop := 16, Timeout := 60, Print := true)
+        : GenCount := 150, MinimizeTop := 16, Timeout := 60, MaxFieldDegree := 1000, MaxDeltaCl := 100000, Print := true)
     fz := IntegralMonicPolynomial(f);
     P, rts, GalData := GaloisGroup(fz);
     t, d := TransitiveGroupIdentification(P);
     T := [ i : i in [1..#subs] | subs[i][3] eq d and subs[i][4] eq t ];
     if Print then printf "Gal(f) = %oT%o; %o matching W(E6) subgroup label(s)\n", d, t, #T; end if;
+    /* The descent and the per-u Clebsch evaluation are over the degree-|Gal(f)|
+       splitting field, which is intractably slow once |Gal(f)| is large (e.g. A5,
+       degree 60, hangs).  Skip such f -- they need a different approach. */
+    if Order(P) gt MaxFieldDegree then
+        if Print then printf "  skipping: |Gal(f)| = %o > MaxFieldDegree = %o\n", Order(P), MaxFieldDegree; end if;
+        return [];
+    end if;
 
     gfull := GaloisSubgroup(GalData, sub<P|>);
     Kf := NumberField(gfull); dK := Degree(gfull);
@@ -369,7 +380,7 @@ RealizeCubicSurfaces := function(f, n, U, subs, dir
         if Print then printf "  label %o:\n", label; end if;
         res := BestCubicsForClass(Kf, autos, perms, PK, Gwe6, U, dir
             : PerClass := n, GenCount := GenCount, MinimizeTop := MinimizeTop,
-              Timeout := Timeout, Print := Print);
+              Timeout := Timeout, MaxDeltaCl := MaxDeltaCl, Print := Print);
         for r in res do Append(~result, < label, r[1] >); end for;
         if Print then printf "    -> %o cubic(s)\n", #res; end if;
     end for;
