@@ -1,0 +1,1093 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black,
+  pdftitle={Background for Algorithm 5.1 of Elsenhans--Jahnel},
+  pdfauthor={OpenAI}
+}
+
+\setlist[enumerate]{itemsep=0.35em,topsep=0.45em}
+\setlist[itemize]{itemsep=0.25em,topsep=0.4em}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+
+\newcommand{\QQ}{\mathbf{Q}}
+\newcommand{\ZZ}{\mathbf{Z}}
+\newcommand{\PP}{\mathbf{P}}
+\newcommand{\AA}{\mathbf{A}}
+\newcommand{\GG}{\mathbf{G}}
+\newcommand{\ol}[1]{\overline{#1}}
+\newcommand{\Gal}{\operatorname{Gal}}
+\newcommand{\Tr}{\operatorname{Tr}}
+\newcommand{\Pic}{\operatorname{Pic}}
+\newcommand{\Spec}{\operatorname{Spec}}
+\newcommand{\Sym}{\operatorname{Sym}}
+\newcommand{\Span}{\operatorname{Span}}
+\newcommand{\Mat}{\operatorname{Mat}}
+\newcommand{\im}{\operatorname{im}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\disc}{\operatorname{disc}}
+\newcommand{\cM}{\mathcal{M}}
+\newcommand{\tcM}{\widetilde{\mathcal{M}}}
+\newcommand{\tM}{\widetilde{M}}
+\newcommand{\cR}{\mathcal{R}}
+\newcommand{\cA}{\mathscr{A}}
+\newcommand{\cL}{\mathcal{L}}
+
+\newenvironment{roadmap}{%
+  \begin{center}\begin{minipage}{0.93\textwidth}\small
+  \hrule\vspace{0.55em}\textbf{Logical role.}\ }{%
+  \vspace{0.55em}\hrule\end{minipage}\end{center}}
+
+\title{Background Needed to Understand and Implement\\
+Algorithm 5.1 of Elsenhans--Jahnel}
+\author{A detailed, proof-free guide to arXiv:1209.5591v3}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Algorithm 5.1 in Elsenhans--Jahnel constructs a smooth cubic surface over
+$\QQ$ whose Galois action on the $27$ lines realizes a prescribed subgroup
+of the Weyl group $W(E_6)$.  The algorithm combines four ingredients:
+Coble's projective coordinates on the moduli space of marked cubic surfaces,
+a linear action of $W(E_6)$ on those coordinates, explicit Galois descent of
+a twisted moduli space, and a second descent that reconstructs an equation
+from Clebsch's invariants.  This note collects the definitions and the
+sequence of constructions needed to understand those ingredients.  It does
+not reproduce the proofs in the paper.  The emphasis is on the objects that
+must actually be represented in an implementation and on the maps that
+connect one stage to the next.
+\end{abstract}
+
+\tableofcontents
+
+\section{What the algorithm does}
+
+Fix a subgroup
+\[
+  G\subseteq W(E_6)
+\]
+and a finite Galois extension $L/\QQ$ together with an explicit isomorphism
+\[
+  \rho:\Gal(L/\QQ)\xrightarrow{\sim}G.
+\]
+Algorithm 5.1 seeks a smooth cubic surface $C/\QQ$ for which the action of
+$\Gal(\ol\QQ/\QQ)$ on the $27$ geometric lines has image conjugate to the
+specified subgroup $G\subseteq W(E_6)$.  The embedding of $G$ into $W(E_6)$,
+not merely the abstract isomorphism type of $G$, is part of the input.
+
+At a high level, the data pass through the following chain:
+\[
+\begin{gathered}
+ (G,L,\rho)
+ \longrightarrow
+ \text{a twisted form }\tcM_{\rho}\text{ of the marked moduli space}
+ \longrightarrow
+ \tcM_{\rho}(\QQ) \\
+ \longrightarrow
+ \text{Coble coordinates }(\gamma_1,\ldots,\gamma_{40})
+ \longrightarrow
+ [A:B:C:D:E] \\
+ \longrightarrow
+ (\sigma_1,\ldots,\sigma_5)
+ \longrightarrow
+ g(T)=\prod_{i=0}^{4}(T-a_i)
+ \longrightarrow
+ \text{an explicit cubic equation over }\QQ.
+\end{gathered}
+\]
+
+There are two conceptually distinct Galois descents.
+
+\begin{enumerate}[label=\textbf{Descent \arabic*.}]
+\item The first descent constructs the twist $\tcM_{\rho}$ and an explicit
+projective model of it over $\QQ$.  This descent encodes the prescribed
+Galois action on the $27$ lines.
+\item The second descent starts from the five pentahedral coefficients
+$a_0,\ldots,a_4$, usually defined only over a splitting field, and produces a
+cubic equation over $\QQ$ by a trace construction.
+\end{enumerate}
+
+The input field $L$ in the first descent and the degree-five etale algebra
+used in the second descent are different objects and need not be related.
+This distinction prevents a common source of confusion.
+
+\begin{roadmap}
+The marked moduli space remembers enough information to prescribe the Galois
+permutation of the lines.  Coble's coordinates make that moduli space
+explicit.  Clebsch's invariants forget the marking.  The equation problem
+then turns the unmarked invariants into a concrete cubic polynomial.
+\end{roadmap}
+
+\section{Cubic surfaces, markings, and the group $W(E_6)$}
+
+\subsection{Smooth cubic surfaces and their lines}
+
+A smooth cubic surface over a field $K$ is a smooth degree-three hypersurface
+$C\subset \PP^3_K$.  Over an algebraic closure $\ol K$, every smooth cubic
+surface contains exactly $27$ lines.  Incidence among these lines is
+preserved by every automorphism of the surface and by the action of
+$\Gal(\ol K/K)$.
+
+The group of permutations of the $27$ lines preserving their intersection
+pairing is naturally isomorphic to the Weyl group $W(E_6)$, of order
+\[
+  |W(E_6)|=51{,}840.
+\]
+Consequently, after choosing labels for the lines, a cubic surface over $K$
+gives a homomorphism
+\[
+  \Gal(\ol K/K)\longrightarrow W(E_6).
+\]
+Changing the labeling conjugates the image.  Thus an unmarked cubic surface
+determines a conjugacy class of subgroups of $W(E_6)$.
+
+\subsection{The blow-up model and a marking}
+
+A marking is an ordered six-tuple
+\[
+  (\ell_1,\ldots,\ell_6)
+\]
+of mutually disjoint lines on $C$.  Blowing down these six lines identifies
+$C_{\ol K}$ with the blow-up of $\PP^2_{\ol K}$ at six ordered points
+$p_1,\ldots,p_6$ in general position.  Here ``general position'' means:
+
+\begin{itemize}
+\item no three of the six points are collinear;
+\item the six points do not all lie on a conic.
+\end{itemize}
+
+Write $H$ for the pullback of a line in $\PP^2$ and $E_i$ for the exceptional
+curve over $p_i$.  The marking determines the standard labeling of all
+$27$ lines:
+\[
+\begin{array}{lll}
+ \ell_i=E_i, & 1\leq i\leq 6, & \text{six exceptional curves},\\[2mm]
+ \ell_{ij}''=H-E_i-E_j, & 1\leq i<j\leq 6, & \text{fifteen transforms of lines},\\[2mm]
+ \ell_i'=2H-\displaystyle\sum_{j\neq i}E_j,
+ & 1\leq i\leq 6, & \text{six transforms of conics}.
+\end{array}
+\]
+The orthogonal complement of the canonical class in $\Pic(C_{\ol K})$ is a
+root lattice of type $E_6$.  The corresponding Weyl group acts by changing
+the marking.
+
+A useful generating set for $W(E_6)$ consists of:
+
+\begin{itemize}
+\item the subgroup $S_6$, which permutes the six blown-up points;
+\item one quadratic Cremona transformation centered at, say,
+$p_1,p_2,p_3$.
+\end{itemize}
+
+This description is important when one constructs the permutation action on
+Coble's invariants explicitly.
+
+\section{The two moduli spaces}
+
+\subsection{The marked moduli space}
+
+Let $U\subset (\PP^2)^6$ be the open set of ordered six-tuples of points in
+general position.  The projective linear group $\operatorname{PGL}_3$ acts by
+simultaneous change of coordinates.  The quotient
+\[
+  \tcM = U/\operatorname{PGL}_3
+\]
+is the fine moduli space of marked smooth cubic surfaces.  It is a smooth
+affine fourfold.  The marking rigidifies the surface: an automorphism that
+fixes the marked lines is the identity, so a fine moduli space can exist.
+
+A convenient affine chart is obtained by sending the first four points to
+\[
+ (1:0:0),\quad (0:1:0),\quad (0:0:1),\quad (1:1:1).
+\]
+A marked surface can then be represented by the columns of
+\[
+ \begin{pmatrix}
+  1&0&0&1&w&y\\
+  0&1&0&1&x&z\\
+  0&0&1&1&1&1
+ \end{pmatrix},
+\]
+subject to explicit nonvanishing conditions expressing general position.
+This chart is useful for evaluation and interpolation computations.
+
+The group $W(E_6)$ acts on $\tcM$ by changing the marking.  Denote the
+corresponding automorphism by
+\[
+  T_g:\tcM\longrightarrow\tcM,
+  \qquad g\in W(E_6).
+\]
+
+\subsection{The unmarked moduli space}
+
+The coarse moduli space of smooth cubic surfaces is
+\[
+  \cM=\tcM/W(E_6).
+\]
+The forgetful morphism
+\[
+  \operatorname{pr}:\tcM\longrightarrow\cM
+\]
+is generically a covering of degree $51{,}840$.  The unmarked moduli space is
+not fine because some cubic surfaces have nontrivial automorphisms.
+
+Clebsch's invariant theory gives an open embedding
+\[
+  \operatorname{Cl}:\cM\hookrightarrow \PP(1,2,3,4,5).
+\]
+The weighted homogeneous coordinates are denoted
+\[
+  [A:B:C:D:E],
+\]
+with weights $1,2,3,4,5$, respectively.
+
+The algorithm uses the marked moduli space to encode the Galois action, but
+it uses the unmarked invariants $[A:B:C:D:E]$ to recover an equation.
+
+\section{Coble's irrational invariants}
+
+\subsection{The basic determinants}
+
+Represent the ordered points $p_i$ by row vectors
+\[
+  p_i=(x_{i,0}:x_{i,1}:x_{i,2}),\qquad 1\leq i\leq 6.
+\]
+For three distinct indices define the $3\times 3$ minor
+\[
+  m_{\{i,j,k\}}
+  =\det\begin{pmatrix}
+    x_{i,0}&x_{i,1}&x_{i,2}\\
+    x_{j,0}&x_{j,1}&x_{j,2}\\
+    x_{k,0}&x_{k,1}&x_{k,2}
+  \end{pmatrix}.
+\]
+It vanishes exactly when $p_i,p_j,p_k$ are collinear.
+
+Let $d_2$ be the determinant of the $6\times6$ matrix obtained by evaluating
+the quadratic monomials at the six points:
+\[
+ d_2=
+ \det\begin{pmatrix}
+ x_{1,0}^2&x_{1,1}^2&x_{1,2}^2&x_{1,0}x_{1,1}&x_{1,0}x_{1,2}&x_{1,1}x_{1,2}\\
+ \vdots&\vdots&\vdots&\vdots&\vdots&\vdots\\
+ x_{6,0}^2&x_{6,1}^2&x_{6,2}^2&x_{6,0}x_{6,1}&x_{6,0}x_{6,2}&x_{6,1}x_{6,2}
+ \end{pmatrix}.
+\]
+It vanishes when the six points lie on a conic.
+
+\subsection{The forty sections}
+
+Coble defines forty multihomogeneous invariants.  There are two types.
+
+For a partition of $\{1,\ldots,6\}$ into two unordered triples, set
+\[
+ \gamma_{(i_1i_2i_3)(i_4i_5i_6)}
+ =m_{\{i_1,i_2,i_3\}}m_{\{i_4,i_5,i_6\}}d_2.
+\]
+There are ten invariants of this type.
+
+For a cyclically ordered triple of unordered pairs, set
+\[
+\begin{aligned}
+ \gamma_{(i_1i_2)(i_3i_4)(i_5i_6)}={}&
+ m_{\{i_1,i_3,i_4\}}m_{\{i_2,i_3,i_4\}}
+ m_{\{i_3,i_5,i_6\}}m_{\{i_4,i_5,i_6\}}\\
+ &\qquad\cdot
+ m_{\{i_5,i_1,i_2\}}m_{\{i_6,i_1,i_2\}}.
+\end{aligned}
+\]
+There are thirty invariants of this type.  A concrete implementation must
+choose and retain a canonical ordering of these forty symbols.
+
+Each $\gamma$ is of degree three in the coordinates of each point.  It is
+invariant under the simultaneous $\operatorname{PGL}_3$ action.  On $U$, none
+of the forty sections vanishes.  The adjective ``irrational'' is historical:
+these are invariants of a \emph{marked} surface, not invariants under the full
+$W(E_6)$ action.  Their values therefore usually live in a field over which
+the marking is defined.
+
+\subsection{The gamma map and its equations}
+
+The forty sections define Coble's gamma map
+\[
+  \gamma:\tcM\hookrightarrow\PP^{39}.
+\]
+Although there are forty coordinate functions, their linear span has
+dimension ten.  Equivalently, there are thirty independent linear relations
+among them, and the image lies in a distinguished $\PP^9\subset\PP^{39}$.
+
+Let $\tM$ denote the Zariski closure of the image.  This is Coble's gamma
+variety.  Inside the $\PP^9$ determined by the linear relations, $\tM$ is the
+common zero locus of a thirty-dimensional space of cubic equations.  Thus:
+\[
+ \dim \Sym^3(\QQ^{10})=220,
+ \qquad
+ \dim \cR_3=30,
+\]
+where $\cR_3$ denotes the space of cubic relations.  The variety has
+dimension four and is not a complete intersection; the thirty cubics are
+highly dependent as equations of a codimension-five variety.
+
+One illustrative cubic relation is
+\[
+\begin{aligned}
+&\gamma_{(12)(34)(56)}\gamma_{(23)(45)(16)}\gamma_{(14)(36)(25)}\\
+&\qquad=
+\gamma_{(12)(36)(45)}\gamma_{(34)(25)(16)}\gamma_{(56)(14)(23)}.
+\end{aligned}
+\]
+Its $W(E_6)$-orbit spans the thirty-dimensional relation space.
+
+For implementation, one chooses ten linearly independent signed gamma
+sections
+\[
+  \eta_1,\ldots,\eta_{10}
+\]
+and expresses every signed invariant as a rational linear combination
+\[
+  \Gamma_a=\sum_{j=1}^{10}J_{aj}\eta_j,
+  \qquad 1\leq a\leq80.
+\]
+Here $\Gamma_1,\ldots,\Gamma_{80}$ denotes the list
+$\{\pm\gamma_1,\ldots,\pm\gamma_{40}\}$, and
+\[
+  J\in\Mat_{80\times10}(\QQ)
+\]
+is a fixed rank-ten matrix.  If $y=(y_1,\ldots,y_{10})^t$ is the vector of
+values of the basis sections at a point, the full signed coordinate vector is
+\[
+  x=Jy\in L^{80}.
+\]
+The matrix $J$ and a basis of the thirty cubic relations are universal data:
+they are computed once and then reused for every group and every number
+field.
+
+\section{The $W(E_6)$ action on Coble coordinates}
+
+\subsection{Why eighty signed coordinates are used}
+
+The line bundle defining the gamma map admits a $W(E_6)$-linearization for
+which every $g\in W(E_6)$ sends each $\gamma_i$ to $\pm\gamma_j$.  Thus the
+action on the forty coordinates is a signed permutation action.
+
+To replace signed permutation matrices by ordinary permutations, the paper
+uses the eighty sections
+\[
+  \pm\gamma_1,\ldots,\pm\gamma_{40}.
+\]
+They define an embedding
+\[
+  \gamma':\tcM\hookrightarrow\PP^{79}
+\]
+that is linearly equivalent to the original gamma map.  The image is still
+contained in a $\PP^9$: the duplication introduces forty relations of the
+form $(-\gamma_i)+\gamma_i=0$, in addition to the thirty relations among the
+original forty gamma sections.
+
+There is a faithful permutation representation
+\[
+  \Pi:W(E_6)\hookrightarrow S_{80}
+\]
+with forty blocks $\{\gamma_i,-\gamma_i\}$.
+
+\subsection{Point-action convention and the inverse permutation}
+
+Let $P_g$ be the $80\times80$ permutation matrix acting on a column of point
+coordinates by
+\[
+  (P_gx)_a=x_{\Pi(g)^{-1}(a)}.
+\]
+Equivalently, the coordinate originally in position $a$ is moved to position
+$\Pi(g)(a)$.  This explains the inverse permutation in the formula in
+Remark 4.4 of the paper.
+
+Since the ten-dimensional linear subspace is stable, there is a unique
+matrix
+\[
+  R_g\in\operatorname{GL}_{10}(\QQ)
+\]
+satisfying
+\[
+  P_gJ=JR_g.
+\]
+The matrices $R_g$ are the ones needed for the actual descent computation.
+They describe the action on the ten point-coordinate parameters $y$.
+
+\begin{roadmap}
+There are three equivalent representations of the same action:
+\[
+\begin{array}{ccl}
+80\text{ coordinates} &:& \text{ordinary permutation matrices }P_g,\\
+40\text{ coordinates} &:& \text{signed permutation matrices},\\
+10\text{ coordinates} &:& \text{dense matrices }R_g.
+\end{array}
+\]
+The paper uses the first model to state the descent cleanly.  An efficient
+implementation normally performs the linear algebra in the third model, and
+may use the second model for the universal precomputation.
+\end{roadmap}
+
+\section{Clebsch invariants and the map that forgets the marking}
+
+Let
+\[
+  P_k=\sum_{i=1}^{40}\gamma_i^k.
+\]
+The sum is over the forty original gamma coordinates, one from each signed
+pair.  The formulas below involve only even $k$, so the chosen sign of each
+$\gamma_i$ is irrelevant.  One must not sum over all eighty signed
+coordinates, since doing so inserts an unwanted factor of two in each
+$P_k$.
+
+Theorem 3.9 of the paper gives the following expressions for the Clebsch
+invariants:
+\[
+\begin{aligned}
+ A={}&-6P_2,\\
+ B={}&-24P_4+\frac{41}{16}P_2^2,\\
+ C={}&\frac{576}{13}P_6-\frac{396}{13}P_4P_2
+       +\frac{29}{13}P_2^3,\\
+ D={}&-\frac{62208}{1171}P_8
+       +\frac{54864}{1171}P_6P_2
+       +\frac{203616}{1171}P_4^2
+       -\frac{61287}{1171}P_4P_2^2
+       +\frac{13393}{4684}P_2^4,\\
+ E={}&\frac{41472}{155}P_{10}
+       -\frac{4605984}{36301}P_8P_2
+       -\frac{106272}{403}P_6P_4
+       +\frac{19990440}{471913}P_6P_2^2\\
+   &\quad
+       +\frac{47719206}{471913}P_4^2P_2
+       -\frac{7468023}{471913}P_4P_2^3
+       +\frac{10108327}{18876520}P_2^5.
+\end{aligned}
+\]
+
+If all gamma coordinates are multiplied by $\lambda$, then the five
+expressions scale by
+\[
+  (\lambda^2,\lambda^4,\lambda^6,\lambda^8,\lambda^{10}).
+\]
+This is exactly weighted projective scaling in $\PP(1,2,3,4,5)$, with
+weighted scalar $\lambda^2$.  Hence the formulas are well defined on the
+projective gamma point.
+
+The expressions are $W(E_6)$-invariant.  Therefore, when the gamma
+coordinates satisfy the twisted Galois compatibility condition, the resulting
+Clebsch invariant vector is fixed by Galois and lies in
+$\PP(1,2,3,4,5)(\QQ)$.
+
+\section{Twisting the marked moduli space}
+
+\subsection{The homomorphism that prescribes the line action}
+
+Let $L/\QQ$ be finite Galois and let
+\[
+  \rho:\Gal(L/\QQ)\xrightarrow{\sim}G\subseteq W(E_6).
+\]
+Composing the restriction map
+$\Gal(\ol\QQ/\QQ)\twoheadrightarrow\Gal(L/\QQ)$ with $\rho$ gives the desired
+continuous homomorphism into $W(E_6)$.
+
+Over $L$, the twisted moduli space becomes the ordinary marked moduli space:
+\[
+  (\tcM_{\rho})_L\cong\tcM_L.
+\]
+Its descent datum is
+\[
+  \delta_\sigma=T_{\rho(\sigma)}\circ\sigma,
+  \qquad \sigma\in\Gal(L/\QQ),
+\]
+where $\sigma$ acts on coefficients and $T_{\rho(\sigma)}$ changes the
+marking.
+
+A $\QQ$-rational point of $\tcM_{\rho}$ is therefore represented by an
+$L$-rational marked cubic surface whose Galois conjugation is compensated by
+the prescribed relabeling.  After forgetting the marking, the underlying
+cubic surface descends to $\QQ$, and the Galois action on its lines is the one
+encoded by $\rho$.
+
+\subsection{The projective fixed-point condition}
+
+For a point
+\[
+  x=(x_1:\cdots:x_{80})\in\gamma'(\tcM_L)\subset\PP^{79}(L),
+\]
+the condition for it to define a $\QQ$-point on the twist is
+\[
+  P_{\rho(\sigma)}\sigma(x)=x
+\]
+in projective space.  In coordinates, this reads
+\[
+ \bigl(\sigma(x_{\Pi(\rho(\sigma))^{-1}(1)}):\cdots:
+       \sigma(x_{\Pi(\rho(\sigma))^{-1}(80)})\bigr)
+   =(x_1:\cdots:x_{80}).
+\]
+
+The paper then imposes exact equality on vectors rather than equality only
+up to scalar:
+\[
+  P_{\rho(\sigma)}\sigma(x)=x\qquad\text{in }L^{80}.
+\]
+The fixed vectors form an $80$-dimensional $\QQ$-vector space in $L^{80}$.
+Intersecting with the ten-dimensional linear subspace containing the gamma
+variety gives a ten-dimensional $\QQ$-vector space $V$.  Galois descent gives
+\[
+  V\otimes_{\QQ}L\cong L^{10},
+\]
+and $\PP(V)$ is the descended ambient projective space.  Thus the stronger
+vector condition is the mechanism for constructing the correct projective
+form; it does not discard the projective descent.
+
+\section{The explicit linear system defining $V$}
+
+This section rewrites steps (i)--(iv) of Algorithm 5.1 in a matrix form suited
+to implementation.
+
+\subsection{Pairing group generators with field automorphisms}
+
+Choose generators
+\[
+  \Gamma=\{g_1,\ldots,g_s\}\subseteq G.
+\]
+For each $g_i$, compute
+\[
+  \sigma_i=\rho^{-1}(g_i)\in\Gal(L/\QQ).
+\]
+The universal precomputation supplies $P_{g_i}$, $J$, and hence $R_{g_i}$ via
+\[
+  P_{g_i}J=JR_{g_i}.
+\]
+
+Choose a $\QQ$-basis
+\[
+  \omega_1,\ldots,\omega_n
+  \qquad(n=[L:\QQ])
+\]
+of $L$.  Let $S_{\sigma_i}\in\operatorname{GL}_n(\QQ)$ be the matrix of
+$\sigma_i$ in this basis, defined by
+\[
+  \sigma_i(\omega_b)=\sum_{a=1}^{n}(S_{\sigma_i})_{ab}\omega_a.
+\]
+
+\subsection{The ten-coordinate fixed equation}
+
+Write $y=(y_1,\ldots,y_{10})^t\in L^{10}$.  Because $x=Jy$ and $J$ has rational
+entries, the eighty-coordinate condition is equivalent to
+\[
+  R_{g_i}\,\sigma_i(y)=y,
+  \qquad i=1,\ldots,s.
+\]
+This is the reduced form of the descent equations.
+
+For a fully rational matrix formulation, write
+\[
+  y_j=\sum_{a=1}^{n}U_{aj}\omega_a
+\]
+with $U\in\Mat_{n\times10}(\QQ)$.  The equation above becomes
+\[
+  S_{\sigma_i}UR_{g_i}^{t}=U.
+\]
+After vectorization, this is
+\[
+  \bigl(R_{g_i}\otimes S_{\sigma_i}-I_{10n}\bigr)\operatorname{vec}(U)=0.
+\]
+Stack these systems for the chosen generators and compute their common
+kernel.  Its $\QQ$-dimension should be ten.  A basis gives vectors
+\[
+  v_1,\ldots,v_{10}\in L^{10}.
+\]
+Put them as columns of a matrix
+\[
+  B_{\rho}=(v_1\ \cdots\ v_{10})\in\operatorname{GL}_{10}(L).
+\]
+Then
+\[
+  y=B_{\rho}z,
+  \qquad z\in\QQ^{10},
+\]
+parametrizes the fixed vector space $V$.
+
+The paper formulates the system in eighty coordinates and therefore counts
+$80[L:\QQ]\#\Gamma$ equations in $10[L:\QQ]$ unknowns.  Passing first to the
+ten-dimensional representation gives the same fixed space with many fewer
+redundant equations.
+
+\subsection{Why generators suffice}
+
+The maps $y\mapsto R_{\rho(\sigma)}\sigma(y)$ form a semilinear group action.
+Hence a vector fixed by the chosen generating automorphisms is fixed by the
+entire Galois group.  No equations for all elements of $G$ are required.
+
+\section{Descending the thirty cubic equations}
+
+Choose a basis
+\[
+  F_1,\ldots,F_{30}\in\QQ[y_1,\ldots,y_{10}]_3
+\]
+of the universal cubic relation space of the gamma variety.  Substitute
+\[
+  y=B_{\rho}z.
+\]
+This produces cubic forms
+\[
+  F_a(B_{\rho}z)\in L[z_1,\ldots,z_{10}]_3.
+\]
+Expand each coefficient in the fixed $\QQ$-basis of $L$:
+\[
+  F_a(B_{\rho}z)
+   =\sum_{b=1}^{n}\omega_bF_{a,b}^{(\rho)}(z),
+  \qquad
+  F_{a,b}^{(\rho)}\in\QQ[z_1,\ldots,z_{10}]_3.
+\]
+The $\QQ$-span of all component forms $F_{a,b}^{(\rho)}$ has dimension
+thirty.  Row reduction in the $220$-dimensional space of cubic monomials
+produces a basis
+\[
+  F_1^{(\rho)},\ldots,F_{30}^{(\rho)}.
+\]
+Their common zero locus
+\[
+  \tM_{\rho}
+  =V(F_1^{(\rho)},\ldots,F_{30}^{(\rho)})
+  \subseteq\PP(V)\cong\PP^9_{\QQ}
+\]
+is the descended compactified gamma variety, namely the Zariski closure of
+the twisted marked moduli space.
+
+Conceptually, the thirty-dimensional relation space is itself stable under
+the semilinear descent action and therefore has a thirty-dimensional
+$\QQ$-form.  Splitting coefficients after substitution is a concrete way to
+compute that form.  An equivalent implementation could compute the fixed
+subspace of the relation representation directly.
+
+\section{Searching for a rational point}
+
+Step (vi) asks for
+\[
+  z=(z_1:\cdots:z_{10})\in\tM_{\rho}(\QQ).
+\]
+The paper does not prescribe a general rational-point algorithm.  This is the
+least canonical and often the most computationally expensive stage.
+
+A basic search enumerates primitive integral vectors of bounded height and
+tests the thirty homogeneous cubics.  The authors improve the coordinate
+system before searching:
+
+\begin{enumerate}
+\item Intersect the fixed space with $\mathcal{O}_L^{10}$, where
+$\mathcal{O}_L$ is the maximal order.  This gives a rank-ten $\ZZ$-lattice.
+\item Use the Minkowski embedding of $L$ to give the lattice a Euclidean
+structure.
+\item Apply LLL and use the reduced lattice basis as the projective
+coordinate basis of $V$.
+\end{enumerate}
+
+This does not change the descended variety; it changes only its coordinates.
+In the authors' computations, the reduced coordinates made small-height
+rational points much easier to find.
+
+A point on the projective closure need not lie in the open moduli locus of
+smooth marked cubic surfaces.  Consequently, every candidate must be passed
+through the reconstruction and smoothness tests described below.
+
+\section{Mapping a rational point back to Coble coordinates}
+
+Suppose a rational point $z\in\QQ^{10}\setminus\{0\}$ has been found.  The
+maps back to the original coordinates are explicit:
+\[
+  z
+  \xmapsto{\ B_{\rho}\ }
+  y=B_{\rho}z\in L^{10}
+  \xmapsto{\ J\ }
+  x=Jy\in L^{80}.
+\]
+Choose the forty designated ``positive'' entries from the signed list to
+obtain
+\[
+  (\gamma_1,\ldots,\gamma_{40})\in L^{40}.
+\]
+The exact fixed-vector construction guarantees that these coordinates obey
+the twisted Galois rule.  Compute $P_2,P_4,P_6,P_8,P_{10}$ and then
+$A,B,C,D,E$ from the formulas in \cref{sec:clebsch-operational} below.
+The resulting values should be fixed by every automorphism of $L/\QQ$; this
+is an important exact-arithmetic check.
+
+\section{The pentahedral family and the equation problem}
+\label{sec:clebsch-operational}
+
+\subsection{Sylvester pentahedral form}
+
+A general cubic surface over an algebraic closure has a pentahedral
+presentation
+\[
+\begin{cases}
+ a_0W_0^3+a_1W_1^3+a_2W_2^3+a_3W_3^3+a_4W_4^3=0,\\
+ W_0+W_1+W_2+W_3+W_4=0.
+\end{cases}
+\]
+The five coefficients are unordered and are defined only up to common
+scaling.  Let
+\[
+  \sigma_i=e_i(a_0,\ldots,a_4),
+  \qquad 1\leq i\leq5,
+\]
+be their elementary symmetric functions.
+
+A proper pentahedron corresponds to
+\[
+  \sigma_5=a_0a_1a_2a_3a_4\neq0.
+\]
+On this family, the Clebsch invariants are represented by
+\[
+\begin{aligned}
+ A&=\sigma_4^2-4\sigma_3\sigma_5,\\
+ B&=\sigma_1\sigma_5^3,\\
+ C&=\sigma_4\sigma_5^4,\\
+ D&=\sigma_2\sigma_5^6,\\
+ E&=\sigma_5^8.
+\end{aligned}
+\]
+These are formulas (3.2) of the paper.
+
+\subsection{Recovering the elementary symmetric functions}
+
+Given a Clebsch vector $[A:B:C:D:E]$ with $E\neq0$, paragraph A.8 chooses a
+convenient common scaling of the pentahedral coefficients and gives
+\[
+ \boxed{
+ [\sigma_1,\sigma_2,\sigma_3,\sigma_4,\sigma_5]
+ =\left[B,\ D,\ \frac{C^2-AE}{4},\ CE,\ E^2\right].
+ }
+\]
+The weights are consistent: under weighted scaling of
+$[A:B:C:D:E]$, the five entries scale with exponents
+$2,4,6,8,10$, which is the scaling obtained by multiplying all pentahedral
+coefficients by a common factor.
+
+Form the monic quintic
+\[
+\begin{aligned}
+ g(T)
+ &=T^5-\sigma_1T^4+\sigma_2T^3-\sigma_3T^2+\sigma_4T-\sigma_5\\
+ &=\prod_{i=0}^{4}(T-a_i).
+\end{aligned}
+\]
+The roots are the pentahedral coefficients.  They generally do not lie in
+$\QQ$, even though all $\sigma_i$ do.
+
+\subsection{The trace form of Algorithm A.10}
+
+To avoid computing a splitting field, define the degree-five etale algebra
+\[
+  \cA=\QQ[T]/(g),
+  \qquad \theta=T\bmod g.
+\]
+The algebra may be a field or a product of fields; separability of $g$ is the
+essential condition.
+
+Let
+\[
+  N=\ker\bigl(\Tr_{\cA/\QQ}:\cA\to\QQ\bigr).
+\]
+Since $\dim_{\QQ}\cA=5$, the trace-zero subspace $N$ has dimension four.
+Choose a basis
+\[
+  c_0,c_1,c_2,c_3\in N.
+\]
+Set
+\[
+  \ell(X)=c_0X_0+c_1X_1+c_2X_2+c_3X_3\in\cA[X_0,X_1,X_2,X_3].
+\]
+Then Algorithm A.10 outputs the cubic form
+\[
+ \boxed{
+  f(X_0,X_1,X_2,X_3)
+  =\Tr_{\cA/\QQ}\bigl(\theta\,\ell(X)^3\bigr).
+ }
+\]
+This is the coordinate-free version of the four steps in Algorithm A.10.
+Computationally, one reduces $\theta\ell(X)^3$ modulo $g(T)$ and applies the
+algebra trace to each polynomial coefficient.
+
+Under the five embeddings of $\cA$ into $\ol\QQ$, $\theta$ maps to
+$a_0,\ldots,a_4$ and $\ell$ maps to five conjugate linear forms
+$\ell_0,\ldots,\ell_4$.  The trace-zero condition gives
+\[
+  \ell_0+\cdots+\ell_4=0,
+\]
+while the trace cubic becomes
+\[
+  a_0\ell_0^3+\cdots+a_4\ell_4^3.
+\]
+This explains structurally why the output is the Galois descent of the
+pentahedral surface.  No splitting field of $g$ is needed.
+
+To implement the basis computation exactly, write
+\[
+  t_j=\Tr_{\cA/\QQ}(\theta^j),\qquad 0\leq j\leq4.
+\]
+A basis of the kernel of the row matrix
+\[
+  (t_0\ t_1\ t_2\ t_3\ t_4)
+\]
+gives the coefficient vectors of $c_0,\ldots,c_3$ in the power basis
+$1,\theta,\ldots,\theta^4$.
+
+\section{Algorithm 5.1, step by step}
+
+It is useful to separate universal data from data depending on the selected
+group and field.
+
+\subsection{Universal precomputation}
+
+Compute once:
+
+\begin{enumerate}
+\item a canonical list of the forty gamma invariants and the eighty signed
+labels;
+\item the permutation representation
+$\Pi:W(E_6)\to S_{80}$, or equivalently signed $40\times40$ matrices;
+\item ten independent signed gamma sections and the matrix
+$J\in\Mat_{80\times10}(\QQ)$ expressing all eighty in that basis;
+\item a basis $F_1,\ldots,F_{30}$ of the cubic relation space in the chosen
+ten coordinates.
+\end{enumerate}
+
+These objects do not depend on $G$ or $L$.
+
+\subsection{Instance-specific computation}
+
+Given $G$, $L$, and $\rho$:
+
+\begin{enumerate}[label=\textbf{Step \arabic*.}]
+\item Choose generators $g_1,\ldots,g_s$ of $G$.  Retrieve their permutations
+$\Pi(g_i)$ and compute the ten-dimensional matrices $R_{g_i}$.
+
+\item Compute the field automorphisms
+$\sigma_i=\rho^{-1}(g_i)$ as matrices in a fixed $\QQ$-basis of $L$.
+
+\item Solve
+\[
+  R_{g_i}\sigma_i(y)=y
+\]
+for all generators.  Obtain a $\QQ$-basis of the ten-dimensional fixed space
+$V$ and the change-of-basis matrix $B_{\rho}$.
+
+\item Substitute $y=B_{\rho}z$ into the universal thirty cubic relations,
+split coefficients in a $\QQ$-basis of $L$, and row-reduce to thirty cubics
+over $\QQ$.  These equations define the compactified twist
+$\tM_{\rho}\subset\PP^9_{\QQ}$.
+
+\item Search for a rational point $z\in\tM_{\rho}(\QQ)$.
+
+\item Map $z$ back through $B_{\rho}$ and $J$ to obtain the forty gamma
+values.  Compute the Clebsch vector $[A:B:C:D:E]$.
+
+\item If $E\neq0$, recover $\sigma_1,\ldots,\sigma_5$, construct $g(T)$,
+and apply the trace formula of Algorithm A.10.  Verify the output.  If a
+genericity or smoothness check fails, return to the rational-point search.
+\end{enumerate}
+
+The mathematical content of the seven steps can be compressed as follows:
+\[
+\boxed{
+\begin{array}{c}
+\text{combine the }W(E_6)\text{-representation with the Galois representation}\\
+\Downarrow\\
+\text{descend Coble's }\PP^9\text{ and its thirty cubic equations}\\
+\Downarrow\\
+\text{find a rational moduli point}\\
+\Downarrow\\
+\text{forget the marking and solve the equation problem.}
+\end{array}}
+\]
+
+\section{Failure loci and post-computation checks}
+
+The algorithm is generic rather than unconditional for every point found on
+the compactification.
+
+\subsection{Failure to find a rational point}
+
+A bounded search may fail even when rational points exist.  It is also
+possible that the selected twist has no $\QQ$-rational point.  The paper's
+remedy is to choose a different Galois extension $L/\QQ$ with the same Galois
+group and repeat the descent.
+
+\subsection{The three main degeneracies}
+
+After computing $[A:B:C:D:E]$, test:
+
+\begin{enumerate}
+\item $E\neq0$.  Since $E=\sigma_5^8$, this is the proper-pentahedron
+condition needed by paragraph A.8.
+
+\item $g(T)$ is separable.  A repeated root means that two pentahedral
+coefficients coincide.  This is the Eckardt/nontrivial-automorphism locus,
+denoted by $F=0$ in the paper.  On this locus, the Clebsch invariants determine
+only the geometric isomorphism class, not the required $\QQ$-form, so the
+equation problem is intrinsically ambiguous from these invariants alone.
+
+\item The output cubic is smooth.  Equivalently, its cubic-surface
+discriminant $\Delta$ is nonzero.  In practice, compute the singular locus of
+the output form or use a discriminant routine.
+\end{enumerate}
+
+A rational point on the boundary of $\tM_{\rho}$ will normally be rejected by
+one of these checks or by direct verification of the resulting surface.
+
+\subsection{Recommended certification checks}
+
+For an exact implementation, verify all of the following:
+
+\begin{itemize}
+\item $\rank(J)=10$ and $P_gJ=JR_g$ for every group generator;
+\item the matrices $R_g$ satisfy the group relations;
+\item the universal cubic relation space has dimension $30$ and is stable
+under $W(E_6)$;
+\item the common fixed space has $\QQ$-dimension $10$ and
+$\det(B_{\rho})\neq0$ in $L$;
+\item the descended cubic space has $\QQ$-dimension $30$;
+\item the point found satisfies all descended cubics;
+\item the recovered Clebsch quantities are fixed by $\Gal(L/\QQ)$;
+\item $g$ is separable and the trace cubic has coefficients in $\QQ$;
+\item the final cubic surface is smooth;
+\item for a final independent certification, compute the $27$ lines and
+compare their Galois permutation group with the desired conjugacy class in
+$W(E_6)$.
+\end{itemize}
+
+\section{How the universal data can be reconstructed}
+
+Algorithm 5.1 assumes that the signed permutation action, the linear
+relations, and the thirty cubic equations are already explicit.  The paper
+does not print large tables containing these data.  The accompanying Magma
+example reconstructs them computationally.  The following is the underlying
+logic.
+
+\subsection{Linear relations by evaluation}
+
+Sample many rational six-point configurations in general position and
+evaluate all forty gamma invariants.  The row space of the resulting
+point-coordinate matrix has dimension ten.  A basis of that row space gives
+a $10\times40$ matrix parametrizing the linear $\PP^9\subset\PP^{39}$; after
+adding the negative coordinates, one obtains $J$ for the eighty-coordinate
+model.
+
+\subsection{Cubic relations by interpolation}
+
+Express the sampled gamma points in the chosen ten coordinates.  There are
+$220$ monomials of degree three in ten variables.  Evaluate all $220$
+monomials at sufficiently many sample points.  The kernel of the resulting
+evaluation matrix has dimension thirty and supplies the cubic relation
+space.
+
+\subsection{The signed $W(E_6)$ action}
+
+Use generators consisting of permutations of the six points and a standard
+quadratic Cremona transformation.  Evaluate the gamma vector at a generic
+configuration and at its transformed configuration.  After consistent
+normalization, match the entries up to sign.  This recovers a signed
+permutation matrix on the forty gamma coordinates.  Duplicating signs yields
+the ordinary permutation $\Pi(g)\in S_{80}$.
+
+All interpolation and matching computations should be followed by symbolic
+or exact evaluation checks on additional configurations.
+
+\section{Notation and data structures at a glance}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.18\textwidth}
+                >{\raggedright\arraybackslash}p{0.30\textwidth}
+                >{\raggedright\arraybackslash}p{0.42\textwidth}}
+\toprule
+Symbol & Type & Role \\
+\midrule
+$G\subseteq W(E_6)$ & finite subgroup & desired permutation group on the $27$ lines \\
+$L/\QQ$ & finite Galois extension & realizes the abstract group $G$ \\
+$\rho$ & $\Gal(L/\QQ)\xrightarrow{\sim}G$ & pairs field automorphisms with marking changes \\
+$\gamma_i$ & forty marked invariants & Coble coordinates on $\tcM$ \\
+$\Pi(g)$ & permutation in $S_{80}$ & action on the signed gamma coordinates \\
+$J$ & $80\times10$ rational matrix & expresses all signed gammas in a fixed basis \\
+$R_g$ & $10\times10$ rational matrix & action on the ten coordinate parameters \\
+$V$ & ten-dimensional $\QQ$-space & fixed space defining the descended $\PP^9$ \\
+$B_{\rho}$ & $10\times10$ matrix over $L$ & maps rational twist coordinates to original gamma coordinates \\
+$F_a^{(\rho)}$ & thirty rational cubics & equations of the compactified twist \\
+$[A:B:C:D:E]$ & point of $\PP(1,2,3,4,5)$ & unmarked Clebsch invariant vector \\
+$\sigma_i$ & rational numbers & elementary symmetric functions of pentahedral coefficients \\
+$g(T)$ & separable quintic & has the pentahedral coefficients as roots \\
+$\cA=\QQ[T]/(g)$ & degree-five etale algebra & supports the second Galois descent \\
+$\Tr(\theta\ell^3)$ & cubic form over $\QQ$ & final equation of the cubic surface \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{The main conceptual points to retain}
+
+\begin{enumerate}
+\item The desired Galois action is encoded by twisting the \emph{marked}
+moduli space, not by imposing equations directly on the $27$ lines.
+
+\item Coble's forty invariants depend on the marking.  Their ten-dimensional
+span supplies an explicit projective model on which $W(E_6)$ acts linearly.
+
+\item The eighty signed coordinates are a bookkeeping device that turns a
+signed permutation action into an ordinary permutation action.
+
+\item The fixed-space equation combines two matrices: a matrix for a field
+automorphism of $L$ and a matrix for the corresponding element of $W(E_6)$.
+The common fixed space is the rational form of the ambient $\PP^9$.
+
+\item The thirty cubic relations must be descended as a vector space; after a
+change of basis over $L$, individual relations need not have rational
+coefficients until their coefficient components are row-reduced.
+
+\item A rational point on the twist gives gamma values over $L$, but the
+$W(E_6)$-invariant power-sum formulas produce rational Clebsch invariants.
+
+\item The final equation is obtained from a separate degree-five etale algebra
+and the trace form $\Tr(\theta\ell^3)$.  This avoids computing the roots of the
+pentahedral quintic.
+
+\item The rational-point search is not specified by the theory and is the
+principal heuristic component.  LLL reduction of the fixed integral lattice
+is the paper's main practical improvement.
+\end{enumerate}
+
+\begin{thebibliography}{9}
+
+\bibitem{EJ}
+A.-S. Elsenhans and J. Jahnel,
+\emph{Moduli spaces and the inverse Galois problem for cubic surfaces},
+Trans. Amer. Math. Soc. \textbf{367} (2015), no.~11, 7837--7861;
+\href{https://arxiv.org/abs/1209.5591}{arXiv:1209.5591v3}.
+
+\bibitem{EJcode}
+J. Jahnel,
+\emph{c9\_example.m: a Magma example implementing Algorithm 5.1},
+authors' supplementary webpage,
+\url{https://wwwuser.gwdguser.de/~jjahnel/Arbeiten/Kub_Fl/c9_example.m}.
+
+\end{thebibliography}
+
+\end{document}

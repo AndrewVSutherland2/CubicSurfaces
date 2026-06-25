@@ -11,8 +11,9 @@ The implementation works through the two Galois descents of the paper using
 Coble's irrational invariants ("gamma coordinates") on the moduli space of
 marked cubic surfaces: it builds the universal 40 invariants and 30 cubic
 relations once, computes the `W(E6)` action on the 10-dimensional linear span,
-descends the twisted moduli space over the splitting field of `f`, searches the
-resulting rational fourfold in `P^9` for a rational point, and converts the
+descends the twisted moduli space over the splitting field of `f`, **produces a
+rational point of the twist with an explicit dominant map from affine 6-space**
+(the A6 cuspidal-cubic producer — no brute-force search), and converts the
 recovered Clebsch invariants into a pentahedral quintic and finally a cubic
 surface in `P^3`.
 
@@ -20,9 +21,12 @@ surface in `P^3`.
 
 | File | Description |
 |------|-------------|
-| `cubic_surface_resolvent_twist.m` | The implementation (all entry points below). |
+| `cubic_surface_resolvent_twist.m` | The core implementation (all entry points below), including the **A6 cuspidal-cubic point producer**. |
+| `database_pipeline.m`             | Generator for **many** surfaces per number field — `GenerateDatabase(f, …)` (see below). |
 | `examples.m`                      | Builds and certifies the four cyclic examples `C4, C5, C9, C12`. |
-| `experiments/point_search_helpers.m` | Exploratory point-search routines (Minkowski reduction, bounded integer search, fibre search) used while investigating the harder non-cyclic twists. |
+| `algorithm_5_1_explicit_A6_map.tex` | The note describing the explicit dominant `A^6 →` moduli map used to avoid the point search. |
+| `cubic_surface_discriminant_clebsch.tex` | The Clebsch–Salmon discriminant `Δ_Cl` (EJ Lemma 2.6), used to rank surfaces by intrinsic discriminant. |
+| `experiments/point_search_helpers.m` | Exploratory routines from the original heuristic point search (now superseded by the A6 map). |
 
 ## Requirements
 
@@ -154,39 +158,98 @@ cyclic group.
 
 ## How it works (one paragraph)
 
-`BuildUniversalCobleData` constructs, once, the 40 Coble gamma invariants, the 80
-signed coordinates, their 10-dimensional linear span and the 30 cubic relations,
-together with the `W(E6)` action on the span. For a target subgroup `G` and a
+`BuildUniversalCobleData` constructs, once, the 40 Coble gamma invariants, their
+10-dimensional linear span and the 30 cubic relations, the `W(E6)` action on the
+span, and **Pinkham's 6-dimensional reflection representation** of `W(E6)` on the
+parameters of six points of a cuspidal cubic. For a target subgroup `G` and a
 polynomial `f` with `Gal(f) ≅ G`, the code forms the semilinear descent condition
-`R_{ρ(σ)}·σ(y) = y` over the splitting field `L` of `f`, solves it for the
-fixed `Q`-rational 10-dimensional space, and substitutes a reduced integral basis
-of that space into the 30 universal cubics to obtain the descended twist — a
-rational fourfold in `P^9`. A rational point on the twist is found by slicing it
-to dimension zero with coordinate and random hyperplanes and solving exactly; its
-coordinates give the Clebsch invariants `[i8 : … : i40]`, from which a pentahedral
-quintic and then a cubic surface in `P^3` are reconstructed. Finally
-`LinesGaloisGroupOfCubicSurface` certifies the result independently from the 27
-lines of the output surface.
+`R_{ρ(σ)}·σ(y) = y` over the splitting field `L` of `f` and solves it for the
+fixed `Q`-rational 10-dimensional space (the descended twist). A rational point of
+the twist is then produced **without any search**, by an explicit **dominant
+rational map `Φ_ρ : A^6 ⇢ M̃_ρ`** (the A6 cuspidal-cubic producer of
+`algorithm_5_1_explicit_A6_map.tex`): six points `p(t)=(t:t^3:1)` on the fixed
+cuspidal cubic blow up to a marked cubic surface, Pinkham's representation is
+twisted by the same cocycle `ρ`, and Coble's gammas restricted to the cusp give
+the point. Because the map is dominant, a generic small integer vector `u ∈ Z^6`
+lands on a smooth surface — the degenerate locus is a proper closed subset to
+avoid, not a wall. The recovered Clebsch invariants `[i8 : … : i40]` give a
+pentahedral quintic and finally a cubic surface in `P^3`, certified independently
+from the 27 lines by `LinesGaloisGroupOfCubicSurface`.
 
-Two coordinate reductions keep the construction fast: the fixed space is taken in
-a **saturated** LLL basis, and the 30 descended cubics are replaced by an
-LLL-reduced basis of their integer coefficient lattice. Without these the cubics
-carry enormous coefficients (growing with `[L:Q]`); with them the cyclic searches
-run in seconds.
+This replaces the heuristic rational-point search of EJ's Algorithm 5.1, which
+failed for the non-cyclic / small twists (every easily-accessible point of the
+descended fourfold was degenerate). The cuspidal map needs no descended cubics at
+all; `UseA6 := true` is the default path of `CubicSurfaceFromSubgroup`.
+
+## Example cubic surfaces
+
+One small cubic surface `= 0` per group, each realising the named group on its 27
+lines (certified independently via `LinesGaloisGroupOfCubicSurface`):
+
+```
+C2   (t^2 - 2):                  -x^2*z + x*y*z - x*y*w - 5*x*z^2 - 8*x*z*w - 3*x*w^2 - y^2*w
+                                  + 2*y*z^2 + 3*y*z*w - 12*z^3 + 12*z^2*w + 27*z*w^2 + 9*w^3
+C3   (t^3+t^2-2t-1):              2*x^2*z + 4*x*y*z + 4*x*z^2 + 3*x*z*w + 2*x*w^2 + y^3 + 2*y^2*w
+                                  + y*z^2 - 3*y*z*w - 3*y*w^2 + z^3 - 10*z^2*w - 14*z*w^2 - 3*w^3
+C4   (t^4+t^3+t^2+t+1):           -x^2*w + x*y^2 + x*y*w + 5*x*z*w - 4*x*w^2 + y^3 + 4*y^2*z - 2*y^2*w
+                                  + 2*y*z^2 + 3*y*z*w - 4*y*w^2 + 4*z^3 + z^2*w + 5*z*w^2 - 10*w^3
+C5   (t^5+t^4-4t^3-3t^2+3t+1):    x^2*y + x^2*w - 2*x*y*z - 2*x*z*w + x*w^2 + 2*y^2*w - 2*y*z^2
+                                  - 5*y*z*w - 2*y*w^2 - z^3 - 3*z^2*w - z*w^2
+C9   (t^9-19t^8+...+285t-19):     x^2*w - x*y^2 + 2*x*y*z + x*y*w - x*z^2 + 5*x*z*w - 2*x*w^2 + 2*y^2*z
+                                  - 3*y^2*w - 2*y*z^2 - 15*y*z*w + 21*y*w^2 - z^3 + 7*z^2*w - 21*z*w^2 + 16*w^3
+C12  (t^12+t^11+...+t+1):         -2*x^2*z + x^2*w - x*y^2 + 4*x*y*z - 8*x*y*w - 2*x*z^2 - 9*x*z*w - 4*x*w^2
+                                  - 3*y^2*z - y^2*w - 8*y*z*w - 11*y*w^2 - z^3 + 3*z^2*w - 2*z*w^2 - w^3
+S3   (t^3-t-1):                  -15*x^2*w - 5*x*y*w + 5*x*z^2 - 17*x*z*w - 5*x*w^2 + 18*y^3 + 25*y^2*z
+                                  + 20*y^2*w + 8*y*z^2 + 18*y*z*w - 21*y*w^2 + 4*z^3 - 16*z^2*w - 58*z*w^2 + 268*w^3
+```
+
+The cyclic groups produce very small models in seconds (`C9`, a degree-9 field,
+reduces to `max|coef| = 4`); `S3` is a "large-discriminant" twist where only
+larger models are currently reachable (see Status).
+
+## Database generation (`database_pipeline.m`)
+
+`database_pipeline.m` (load after the core file) turns the A6 producer into a
+generator of *many* surfaces per number field:
+
+```
+load "cubic_surface_resolvent_twist.m";
+load "database_pipeline.m";
+U    := BuildUniversalCobleData();
+rows := GenerateDatabase(f, U, "/tmp/cs" : PerClass := 5);
+```
+
+For `f` with `Gal(f) = G`, and **each** `W(E6)`-conjugacy class of subgroups
+isomorphic to `G` and **each distinct embedding `ρ`** (up to normalizer-conjugacy
+— genuinely different twists), it: generates many distinct moduli points (fast —
+the A6 map, no reduction); ranks them by the **Clebsch–Salmon discriminant**
+`Δ_Cl = A⁴ − 128A²B + 4096B² − 2048AC − 16384D` (the intrinsic discriminant, with
+`(A,…,E) = (i8,…,i40)`; EJ Lemma 2.6, `cubic_surface_discriminant_clebsch.tex`);
+reconstructs the lowest-discriminant candidates and **minimizes them in parallel
+under a per-job timeout**; and keeps the smallest. Each row is `⟨class, surface,
+max|coef|, z, Clebsch invariants, Δ_Cl, ρ⟩`. For example,
+`GenerateDatabase(t^3+t^2-2*t-1, U, dir)` returns 15 certified `C3` cubics (5 per
+class × 3 classes) in ~7 s.
 
 ## Status and limitations
 
-- **Cyclic groups work and are certified** end to end: `C4, C5, C9, C12` (above).
-- The **descent is correct for every group** (verified separately), but the
-  **rational-point search is heuristic** (this is the heuristic step of EJ's
-  Algorithm 5.1). For several non-cyclic / very small groups (`C2, C3, S3, D4,
-  C3²`, …) the easily-accessible rational points of the twist are all degenerate
-  (singular surfaces), and the slicing / bounded / line searches here did not
-  reach a smooth point. Elsenhans–Jahnel reached such points with a
-  Minkowski-reduced `O_L¹⁰ ∩ V` integral-lattice search (and a choice of
-  favourable `f`); matching them on the remaining six "hard" classes (gap
-  nos. 155, 169, 177, 179, 266, 286; no. 73 = `C9` is reproduced here) is the
-  natural next step.
+- **The point search is resolved.** The A6 cuspidal map is dominant, so a smooth
+  marked surface is found for **every** twist by enumerating small `u ∈ Z^6` —
+  including the non-cyclic / small groups (`C2, C3, S3, …`) where the old
+  heuristic search failed entirely. Certified end to end: `C2, C3, C4` (all four
+  `W(E6)` classes), `C5, C9, C12, S3`.
+- **Field degree is not the blocker.** `C9` (degree-9 splitting field) reduces to
+  `max|coef| = 4` in ~3 s.
+- **Open: small explicit models for "large-Clebsch" twists.** The difficulty of
+  producing a *small* explicit equation is governed by the twist's
+  Clebsch-invariant height (set by the descent basis), not the field degree.
+  Cyclic / small twists give tiny `Δ_Cl` (≤ ~30 digits) and minimize fast;
+  `S3`-type twists give `Δ_Cl ≳ 60` digits, whose models are badly non-minimal
+  (large spurious primes in the model discriminant), so full minimization via
+  `MinimizeReduceCubicSurface` is expensive. The pipeline's parallel-timeout
+  harvest still extracts whatever minimizes, but full coverage of these twists
+  awaits a lower-height reconstruction or a smaller descent basis. (The first ten
+  `S3` cubic fields from the LMFDB are all in this regime.)
 
 ## References
 

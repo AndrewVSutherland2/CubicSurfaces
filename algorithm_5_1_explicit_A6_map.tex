@@ -1,0 +1,1236 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black,
+  pdftitle={An explicit A6 point producer for Algorithm 5.1},
+  pdfauthor={OpenAI}
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  xleftmargin=0.5em,
+  xrightmargin=0.5em,
+  aboveskip=0.7em,
+  belowskip=0.7em
+}
+
+\setlist[enumerate]{itemsep=0.35em,topsep=0.45em}
+\setlist[itemize]{itemsep=0.25em,topsep=0.4em}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+
+\newcommand{\QQ}{\mathbf{Q}}
+\newcommand{\ZZ}{\mathbf{Z}}
+\newcommand{\PP}{\mathbf{P}}
+\newcommand{\Aff}{\mathbf{A}}
+\newcommand{\ol}[1]{\overline{#1}}
+\newcommand{\Gal}{\operatorname{Gal}}
+\newcommand{\Mat}{\operatorname{Mat}}
+\newcommand{\Span}{\operatorname{Span}}
+\newcommand{\im}{\operatorname{im}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\Spec}{\operatorname{Spec}}
+\newcommand{\cM}{\mathcal{M}}
+\newcommand{\tcM}{\widetilde{\mathcal{M}}}
+\newcommand{\tM}{\widetilde{M}}
+\newcommand{\cO}{\mathcal{O}}
+\newcommand{\cL}{\mathcal{L}}
+\newcommand{\sI}{s}
+\newcommand{\Gamhat}{\widehat{\Gamma}}
+\newcommand{\gamhat}{\widehat{\gamma}}
+\newcommand{\Deltav}{\Delta_{\mathrm{VdM}}}
+\newcommand{\deltaE}{\delta_{E_6}}
+
+\newenvironment{summarybox}{%
+  \begin{center}\begin{minipage}{0.94\textwidth}\small
+  \hrule\vspace{0.55em}}{%
+  \vspace{0.55em}\hrule\end{minipage}\end{center}}
+
+\title{An Explicit $\Aff^6$ Point Producer for the Twists\\
+in Algorithm 5.1 of Elsenhans--Jahnel}
+\author{Cuspidal-cubic parameters, Pinkham's $E_6$ action,\\
+and integration with the descent data of Section 7}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The rational-point search in step (vi) of Algorithm 5.1 can be replaced by an
+explicit dominant rational map from affine six-space.  The construction puts six
+ordered points on a fixed cuspidal cubic, uses Pinkham's linear reflection
+representation of $W(E_6)$ on their six parameters, twists this six-dimensional
+representation by the same Galois cocycle used in the paper, and evaluates Coble's
+forty gamma coordinates.  A useful normalization by the six-variable Vandermonde
+turns the restricted gamma coordinates into degree-nine polynomials and removes
+the parameter-dependent scalar in the Cremona action.  This note gives all formulas,
+the required linear systems, the conversion to the ten descended coordinates from
+Section 7, and implementation-oriented pseudocode.  The resulting map is dominant,
+so an exhaustive search in six integer parameters is guaranteed to produce a point
+in the open twisted marked moduli space, not merely in its compactification.
+\end{abstract}
+
+\tableofcontents
+
+\section{The conclusion and the formula to implement}
+
+Retain the notation and the data from Section 7 of the earlier note.  Thus
+$L/\QQ$ is finite Galois,
+\[
+  \rho:\Gal(L/\QQ)\xrightarrow{\sim}G\subseteq W(E_6),
+\]
+$J\in\Mat_{80\times10}(\QQ)$ identifies the ten-dimensional span of the
+signed gamma coordinates with a subspace of $\QQ^{80}$, and
+$B_\rho\in\operatorname{GL}_{10}(L)$ has columns forming a $\QQ$-basis of the
+exact semilinear fixed space used to descend the ambient $\PP^9$.
+
+There is a second fixed-space matrix
+\[
+  D_\rho\in\operatorname{GL}_6(L),
+\]
+computed from Pinkham's six-dimensional reflection representation.  It identifies
+the twist of that representation with $\Aff^6_\QQ$:
+\[
+  u\in\QQ^6\longmapsto t=D_\rho u\in L^6.
+\]
+Let
+\[
+  \Gamhat:L^6\longrightarrow L^{80}
+\]
+be the explicitly evaluable signed Coble vector defined in
+\cref{sec:normalized-gammas}.  It consists of degree-nine polynomials.  Choose a
+rational left inverse
+\[
+  K\in\Mat_{10\times80}(\QQ),\qquad KJ=I_{10}.
+\]
+Then the desired map is
+\begin{equation}
+ \boxed{
+ \Phi_\rho:\Aff^6_\QQ\dashrightarrow\tM_\rho\subseteq\PP^9_\QQ,
+ \qquad
+ u\longmapsto
+ \left[B_\rho^{-1}K\Gamhat(D_\rho u)\right].
+ }
+ \label{eq:main-map}
+\end{equation}
+Although the vector inside brackets is written with entries in $L$, its coordinate
+ratios lie in $\QQ$.  On the open set specified in \cref{sec:regular-locus}, the
+image lies in the open twisted marked moduli space $\tcM_\rho$, hence represents a
+smooth marked cubic surface.
+
+\begin{summarybox}
+\textbf{Algorithmic consequence.}
+Steps (v) and (vi) of Algorithm 5.1---descending the thirty cubics and then searching
+for a rational point on their common zero locus---are no longer needed for point
+production.  One may retain the descended cubics as an optional certificate.  The
+replacement consists only of a six-dimensional semilinear fixed-space computation,
+evaluation of forty explicit degree-nine products, and linear algebra with $J$ and
+$B_\rho$.
+\end{summarybox}
+
+\section{What must be added to the Section 7 data}
+
+The construction reuses all of the ten-dimensional data already described in
+Section 7.  Only three additions are needed.
+
+\begin{enumerate}
+\item A six-dimensional matrix representation
+\[
+  \mu:W(E_6)\longrightarrow\operatorname{GL}_6(\QQ),
+  \qquad g\longmapsto M_g,
+\]
+with explicit generator matrices; see \cref{sec:pinkham-action}.
+
+\item A basis matrix $D_\rho$ for the semilinear fixed space in $L^6$; see
+\cref{sec:source-descent}.
+
+\item An evaluator for the forty normalized gamma polynomials, in precisely the
+same label order used to construct $J$ and the signed permutation matrices; see
+\cref{sec:normalized-gammas,sec:ordering}.
+\end{enumerate}
+
+The safest universal data structure stores every element of $W(E_6)$ as a word in
+fixed generators.  The same word is then evaluated in the $80$-dimensional signed
+gamma representation, the ten-dimensional representation, and the six-dimensional
+Pinkham representation.  This removes nearly all inverse and left-versus-right
+action ambiguity.
+
+\section{The untwisted cuspidal-cubic parameterization}
+\label{sec:cusp-map}
+
+\subsection{Six points on a fixed cuspidal cubic}
+
+Let
+\[
+  C:\ yz^2=x^3\subseteq\PP^2_\QQ.
+\]
+Its smooth locus is parametrized by
+\[
+  p(t)=(t:t^3:1),\qquad t\in\Aff^1.
+\]
+For
+\[
+  t=(t_1,\ldots,t_6)\in\Aff^6,
+\]
+put
+\[
+  p_i(t)=p(t_i)=(t_i:t_i^3:1).
+\]
+Whenever these six ordered points are in general position, blowing them up and
+using the anticanonical linear system produces a smooth cubic surface together with
+the ordered six exceptional curves.  The latter are a marking.  Thus one obtains a
+rational map
+\[
+  f:\Aff^6\dashrightarrow\tcM,
+\]
+where $\tcM$ denotes the moduli space of smooth marked cubic surfaces.
+
+Duncan and Reichstein explain that this map is dominant: a general ordered
+six-point configuration in $\PP^2$ lies on the smooth locus of some cuspidal cubic,
+and all cuspidal plane cubics are projectively equivalent in characteristic different
+from $2$ and $3$ \cite[Lemma 6.1]{DR-PR}.
+
+\subsection{The regular locus}
+\label{sec:regular-locus}
+
+For a subset $I\subseteq\{1,\ldots,6\}$, write
+\[
+  s_I(t)=\sum_{i\in I}t_i,
+  \qquad
+  s_{[6]}(t)=t_1+\cdots+t_6.
+\]
+The six points are distinct precisely when
+\[
+  t_i-t_j\neq0\qquad(i\neq j).
+\]
+Three distinct points $p_i,p_j,p_k$ on $C$ are collinear precisely when
+\[
+  t_i+t_j+t_k=0,
+\]
+and all six lie on a conic precisely when
+\[
+  t_1+\cdots+t_6=0
+\]
+\cite[Lemma 6.1]{DR-PR}.  Consequently the general-position locus is
+\[
+  V^\circ=\{t\in\Aff^6:\deltaE(t)\neq0\},
+\]
+where
+\begin{equation}
+ \boxed{
+  \deltaE(t)=
+  \left(\prod_{1\leq i<j\leq6}(t_j-t_i)\right)
+  \left(\prod_{1\leq i<j<k\leq6}(t_i+t_j+t_k)\right)
+  (t_1+\cdots+t_6).
+ }
+ \label{eq:E6-discriminant}
+\end{equation}
+There are $15+20+1=36$ linear factors.  They are the positive-root hyperplanes for
+the reflection representation of type $E_6$ used below.
+
+On $V^\circ$, the map $f$ is a regular map to $\tcM$.  The complement of
+$V^\circ$ is exactly the locus that must be rejected before evaluating a candidate
+parameter vector.
+
+\section{Pinkham's explicit six-dimensional $W(E_6)$ action}
+\label{sec:pinkham-action}
+
+\subsection{Simple reflections}
+
+Regard $t=(t_1,\ldots,t_6)^t$ as a column vector.  Put
+\[
+  c=t_1+t_2+t_3.
+\]
+Pinkham's Cremona reflection is
+\begin{equation}
+\begin{aligned}
+ t_i&\longmapsto t_i-\frac23c &&(i=1,2,3),\\
+ t_j&\longmapsto t_j+\frac13c &&(j=4,5,6).
+\end{aligned}
+\label{eq:pinkham-reflection}
+\end{equation}
+In matrix form,
+\begin{equation}
+ M_{s_1}=\frac13
+ \begin{pmatrix}
+  1&-2&-2&0&0&0\\
+ -2& 1&-2&0&0&0\\
+ -2&-2& 1&0&0&0\\
+  1& 1& 1&3&0&0\\
+  1& 1& 1&0&3&0\\
+  1& 1& 1&0&0&3
+ \end{pmatrix}.
+ \label{eq:pinkham-matrix}
+\end{equation}
+For $i=2,\ldots,6$, let $s_i$ interchange $t_{i-1}$ and $t_i$ and leave the
+other coordinates fixed.  These six matrices satisfy the Coxeter relations of type
+$E_6$.  With the numbering used here, the edges are
+\[
+  \{1,4\},\ \{2,3\},\ \{3,4\},\ \{4,5\},\ \{5,6\}.
+\]
+Thus
+\[
+ (s_is_j)^3=1
+ \quad\text{for these five pairs},
+ \qquad
+ (s_is_j)^2=1
+ \quad\text{for all other }i\neq j.
+\]
+Pinkham derives \eqref{eq:pinkham-reflection} from the standard quadratic
+transformation centered at the first three blow-up points and proves that these
+transformations give the Weyl reflection action \cite[pp.~196--198]{Pinkham}.
+Duncan--Reichstein use this observation to make the dominant map
+$\Aff^6\dashrightarrow\tcM$ $W(E_6)$-equivariant \cite[Lemma 6.1]{DR-PR}.
+
+\subsection{The three generators matching the authors' Magma example}
+
+The supplementary file \texttt{c9\_example.m} constructs $W(E_6)$ from three
+operations: one Cremona transformation, a six-cycle of the points, and the
+transposition of the first two points \cite{EJcode}.  The corresponding matrices on
+$t$ are
+\[
+ M_{\mathrm{cr}}=M_{s_1},
+\]
+\[
+ M_{\mathrm{cyc}}
+ \begin{pmatrix}t_1\\t_2\\t_3\\t_4\\t_5\\t_6\end{pmatrix}
+ =
+ \begin{pmatrix}t_2\\t_3\\t_4\\t_5\\t_6\\t_1\end{pmatrix},
+ \qquad
+ M_{\mathrm{sw}}
+ \begin{pmatrix}t_1\\t_2\\t_3\\t_4\\t_5\\t_6\end{pmatrix}
+ =
+ \begin{pmatrix}t_2\\t_1\\t_3\\t_4\\t_5\\t_6\end{pmatrix}.
+\]
+These three matrices generate the same six-dimensional representation.  If the
+existing implementation represents elements of $G$ as words in the three gamma
+matrices constructed from \texttt{bo -> bo2}, \texttt{bo -> bo3}, and
+\texttt{bo -> bo4}, evaluate those identical words in
+$M_{\mathrm{cr}},M_{\mathrm{cyc}},M_{\mathrm{sw}}$.
+
+\subsection{Convention test}
+
+The paper and its Magma code use row vectors in some places and column vectors in
+others, and a permutation of coordinates can be represented either by a matrix or
+its inverse.  Before any descent computation, perform the following universal test
+for each chosen generator $g$ and a random $t\in V^\circ(\QQ)$:
+\[
+  [\Gamma(M_gt)]=[P_g\Gamma(t)]
+  \quad\text{in }\PP^{79}.
+\]
+If instead the right side agrees with $P_g^{-1}\Gamma(t)$, replace every $M_g$ by
+$M_{g^{-1}}$, or equivalently reverse the word convention.  The same adjustment
+must then be used in the six- and ten-dimensional fixed equations.
+
+\section{Coble coordinates restricted to the cusp}
+\label{sec:normalized-gammas}
+
+\subsection{Factorization of the basic determinants}
+
+For $I\subseteq\{1,\ldots,6\}$, define
+\[
+  \Delta_I(t)=\prod_{\substack{i<j\\i,j\in I}}(t_j-t_i),
+  \qquad
+  \Deltav(t)=\Delta_{\{1,\ldots,6\}}(t).
+\]
+For a three-element set $I=\{i,j,k\}$, Coble's minor evaluated at
+$p_r=(t_r:t_r^3:1)$ is
+\begin{equation}
+  m_I(t)=\Delta_I(t)s_I(t).
+  \label{eq:minor-factor}
+\end{equation}
+Indeed, it is the determinant of the three rows
+$(t_r,t_r^3,1)$ for $r\in I$.  The conic determinant of
+Elsenhans--Jahnel, Definition 2.3, becomes
+\begin{equation}
+  d_2(t)=\Deltav(t)s_{[6]}(t).
+  \label{eq:d2-factor}
+\end{equation}
+These identities turn every gamma coordinate into a product of linear forms.
+
+\subsection{The ten coordinates of the first type}
+
+For an unordered decomposition
+\[
+  I\sqcup I^c=\{1,\ldots,6\},\qquad |I|=|I^c|=3,
+\]
+Coble's first type is
+\[
+  \gamma_{I\mid I^c}=m_I m_{I^c}d_2.
+\]
+Using \eqref{eq:minor-factor} and \eqref{eq:d2-factor},
+\[
+  \gamma_{I\mid I^c}
+  =\Deltav\,\Delta_I\Delta_{I^c}s_Is_{I^c}s_{[6]}.
+\]
+Define the normalized coordinate
+\begin{equation}
+ \boxed{
+  \gamhat_{I\mid I^c}(t)
+  :=\frac{\gamma_{I\mid I^c}(t)}{\Deltav(t)}
+  =\Delta_I(t)\Delta_{I^c}(t)s_I(t)s_{I^c}(t)s_{[6]}(t).
+ }
+ \label{eq:gammahat-I}
+\end{equation}
+It is a homogeneous polynomial of degree $9$.
+
+\subsection{The thirty coordinates of the second type}
+
+Let $A,B,C$ be three unordered pairs partitioning $\{1,\ldots,6\}$.  A cyclic
+orientation $(A,B,C)$ determines one of the two coordinates attached to the
+partition.  Coble's formula is
+\[
+ \gamma_{A\to B\to C}
+ =
+ \prod_{a\in A}m_{\{a\}\cup B}
+ \prod_{b\in B}m_{\{b\}\cup C}
+ \prod_{c\in C}m_{\{c\}\cup A}.
+\]
+For a pair $A=\{a_1<a_2\}$, write
+\[
+  d_A=t_{a_2}-t_{a_1}.
+\]
+In the product above, every difference $t_j-t_i$ occurs at least once; the three
+within-pair differences $d_A,d_B,d_C$ occur twice, and all twelve cross-pair
+differences occur once.  Hence the difference part is
+$\Deltav d_A d_B d_C$.  Therefore
+\begin{equation}
+\boxed{
+\begin{aligned}
+ \gamhat_{A\to B\to C}(t)
+ &:=\frac{\gamma_{A\to B\to C}(t)}{\Deltav(t)}\\
+ &=d_A d_B d_C
+ \prod_{a\in A}s_{\{a\}\cup B}
+ \prod_{b\in B}s_{\{b\}\cup C}
+ \prod_{c\in C}s_{\{c\}\cup A}.
+\end{aligned}}
+\label{eq:gammahat-II}
+\end{equation}
+This is again a degree-nine polynomial.  Reversing the cyclic orientation from
+$(A,B,C)$ to $(A,C,B)$ gives the other coordinate.
+
+\subsection{The normalized gamma vector and the convention sign mask}
+
+The formulas \eqref{eq:gammahat-I} and \eqref{eq:gammahat-II} use the
+\emph{canonical minor convention}: whenever a minor $m_I$ occurs, its row indices
+are first put in increasing order.  Choose exactly the same ordering of the forty
+\emph{labels} as in the universal data and initially put
+\[
+  \Gamhat^{\mathrm{can}}_{40}(t)
+  =\bigl(\gamhat_1(t),\ldots,\gamhat_{40}(t)\bigr)^t.
+\]
+Because every raw gamma coordinate has the common factor $\Deltav$ on the cusp,
+\[
+  [\Gamhat^{\mathrm{can}}_{40}(t)]=[\Gamma^{\mathrm{can}}_{40}(t)]
+  \in\PP^{39}
+  \qquad(t\in V^\circ).
+\]
+Thus the normalized vector gives exactly the same marked cubic surface.  Its lower
+degree is computationally important: products of degree $9$ replace products of
+degree $24$.
+
+There is one small but essential implementation detail.  A stored implementation
+may evaluate a determinant with its row indices in the order appearing in Coble's
+product, rather than first sorting them.  This changes individual gamma coordinates
+by fixed signs.  In particular, the authors' \texttt{gamma\_3} routine has this
+feature for some of the thirty type-II coordinates.  Therefore store a universal
+sign mask
+\[
+  \eta=(\eta_1,\ldots,\eta_{40})\in\{\pm1\}^{40}
+\]
+and define the normalized vector in the \emph{stored} forty-coordinate convention by
+\begin{equation}
+  \Gamhat^{\mathrm{st}}_{40}(t)
+  =\bigl(\eta_1\gamhat_1(t),\ldots,
+          \eta_{40}\gamhat_{40}(t)\bigr)^t.
+  \label{eq:stored-sign-mask}
+\end{equation}
+The mask can be computed once and for all from a single regular rational test vector
+$t^{(0)}$:
+\begin{equation}
+  \eta_a=
+  \frac{\Gamma^{\mathrm{st}}_a(t^{(0)})}
+       {\Deltav(t^{(0)})\gamhat_a(t^{(0)})}\in\{\pm1\}.
+  \label{eq:sign-calibration}
+\end{equation}
+Equivalently, for each raw product multiply the parities required to sort the row
+indices of its six minors.  The quotient in \eqref{eq:sign-calibration} must be
+exactly $+1$ or $-1$ and should be asserted in code.  The ten type-I entries in the
+authors' ordering have sign $+1$; among the thirty type-II entries some signs are
+negative.
+
+To pass to the paper's $80$ signed coordinates, use the stored signed-label list.
+For each signed label $(\varepsilon,a)$, with $\varepsilon\in\{\pm1\}$ and
+$1\leq a\leq40$, place
+$\varepsilon\eta_a\gamhat_a(t)$ in the corresponding slot.  Denote the result by
+\[
+  \Gamhat(t)\in L^{80}.
+\]
+Do not assume that the universal order is ``all positive coordinates, then all
+negative coordinates'' unless that is how $J$ and $P_g$ were constructed.  The
+sign mask and the signed-label order are separate pieces of universal data.
+
+\section{Why the Vandermonde normalization is especially useful}
+\label{sec:exact-equivariance}
+
+The map to projective gamma coordinates is already enough for descent.  The
+normalization above has the additional advantage that it removes the nonconstant
+common scalar in Pinkham's Cremona reflection.
+
+\subsection{The root-factor substitution table}
+
+Put
+\[
+  A_0=\{1,2,3\},\qquad B_0=\{4,5,6\},\qquad c=s_{A_0}.
+\]
+Under the reflection \eqref{eq:pinkham-reflection}:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.39\textwidth}
+                >{\raggedright\arraybackslash}p{0.49\textwidth}}
+\toprule
+Linear form & Image \\
+\midrule
+$t_j-t_i$ with $i,j$ both in $A_0$ or both in $B_0$
+  & unchanged \\
+$t_j-t_i$ with $i\in A_0$, $j\in B_0$
+  & $s_{(A_0\setminus\{i\})\cup\{j\}}$ \\
+$s_{(A_0\setminus\{i\})\cup\{j\}}$ with $i\in A_0$, $j\in B_0$
+  & $t_j-t_i$ \\
+$s_{A_0}$ & $-s_{A_0}$ \\
+$s_{B_0}$ & $s_{[6]}$ \\
+$s_{[6]}$ & $s_{B_0}$ \\
+A triple sum with one index in $A_0$ and two in $B_0$
+  & unchanged \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Define
+\[
+ D_\times(t)=\prod_{i\in A_0}\prod_{j\in B_0}(t_j-t_i),
+\]
+\[
+ N_\times(t)=
+ \prod_{i\in A_0}\prod_{j\in B_0}
+ s_{(A_0\setminus\{i\})\cup\{j\}},
+ \qquad
+ q(t)=\frac{N_\times(t)}{D_\times(t)}.
+\]
+The table gives
+\begin{equation}
+  \Deltav(M_{s_1}t)=q(t)\Deltav(t).
+  \label{eq:vandermonde-transform}
+\end{equation}
+Substitution in Coble's forty formulas gives a signed permutation matrix $Q_1$ such
+that
+\[
+  \Gamma_{40}(M_{s_1}t)=q(t)Q_1\Gamma_{40}(t).
+\]
+After division by $\Deltav$, the scalar cancels:
+\begin{equation}
+  \Gamhat_{40}(M_{s_1}t)=Q_1\Gamhat_{40}(t).
+  \label{eq:exact-cremona}
+\end{equation}
+
+For an adjacent transposition $s_i$, $i=2,\ldots,6$, direct relabeling gives a
+signed permutation $Q_i$ with
+\[
+  \Gamma_{40}(M_{s_i}t)=Q_i\Gamma_{40}(t),
+  \qquad
+  \Deltav(M_{s_i}t)=-\Deltav(t).
+\]
+Consequently
+\begin{equation}
+  \Gamhat_{40}(M_{s_i}t)=(-Q_i)\Gamhat_{40}(t).
+  \label{eq:exact-symmetric}
+\end{equation}
+The six signed matrices
+\[
+  \widehat P_{s_1}=Q_1,
+  \qquad
+  \widehat P_{s_i}=-Q_i\quad(2\leq i\leq6)
+\]
+satisfy the $E_6$ Coxeter relations and yield an exact polynomial equivariance
+\begin{equation}
+  \Gamhat_{40}(M_gt)=\widehat P_g\Gamhat_{40}(t)
+  \qquad(g\in W(E_6)).
+  \label{eq:exact-equivariance}
+\end{equation}
+
+\subsection{How to construct the signed matrices without interpolation}
+
+Equations \eqref{eq:gammahat-I} and \eqref{eq:gammahat-II} express each coordinate
+as a multiset of linear root factors.  For each simple generator:
+
+\begin{enumerate}
+\item transform every factor using the table above or the corresponding adjacent
+transposition;
+\item sort the transformed factors;
+\item locate the unique normalized gamma label with the same factor multiset;
+\item record the sign coming from factors sent to their negatives.
+\end{enumerate}
+
+This produces the six $40\times40$ signed permutation matrices exactly.  It is a
+symbolic alternative to the interpolation-and-matching step in the authors' Magma
+example.  Doubling the signs in the usual way produces ordinary permutations on
+the $80$ signed coordinates.
+
+If $H=\operatorname{diag}(\eta_1,\ldots,\eta_{40})$ is the convention
+sign mask, the matrices in the stored forty-coordinate convention are obtained by
+conjugating by $H$.  The signed lift obtained this way and the signed lift stored in
+an existing implementation can still differ by harmless global signs or by the
+chosen ordering of the two signs, even though their projective actions agree.  For the map \eqref{eq:main-map}, only
+projective agreement with the stored $P_g$ is required.  The generator test in
+\cref{sec:pinkham-action} detects the necessary conversion.
+
+\section{Twisting the six-dimensional source}
+\label{sec:source-descent}
+
+\subsection{The semilinear fixed space}
+
+Let $g_1,\ldots,g_r$ be the same generators of $G$ used in the ten-dimensional
+descent, and let
+\[
+  \sigma_i=\rho^{-1}(g_i)\in\Gal(L/\QQ).
+\]
+Suppose the convention in Section 7 imposes
+\[
+  R_{g_i}\sigma_i(y)=y
+  \qquad\text{on }L^{10}.
+\]
+Use the identical convention on $L^6$:
+\begin{equation}
+  M_{g_i}\sigma_i(t)=t,
+  \qquad i=1,\ldots,r.
+  \label{eq:source-fixed}
+\end{equation}
+The common fixed vectors form a six-dimensional $\QQ$-vector space
+\[
+  V_\rho^{(6)}
+  =\{t\in L^6:M_{g_i}\sigma_i(t)=t\text{ for every }i\}.
+\]
+This is the affine-space twist of Pinkham's reflection representation.
+
+If the existing code instead uses the equivalent convention
+$\sigma_i(y)=R_{g_i}y$, then use $\sigma_i(t)=M_{g_i}t$.  The point is not which
+formula is preferred; the point is that the six- and ten-dimensional descents must
+use the same descent datum.
+
+\subsection{The rational linear system}
+
+Choose a $\QQ$-basis $\omega_1,\ldots,\omega_n$ of $L$, and let
+$S_{\sigma_i}\in\operatorname{GL}_n(\QQ)$ be the matrix of $\sigma_i$:
+\[
+  \sigma_i(\omega_b)=\sum_a(S_{\sigma_i})_{ab}\omega_a.
+\]
+Write
+\[
+  t_j=\sum_{a=1}^n U_{aj}\omega_a,
+  \qquad U\in\Mat_{n\times6}(\QQ).
+\]
+Then \eqref{eq:source-fixed} is equivalent to
+\begin{equation}
+  S_{\sigma_i}U M_{g_i}^{t}=U.
+  \label{eq:source-matrix-system}
+\end{equation}
+After vectorization,
+\[
+  (M_{g_i}\otimes S_{\sigma_i}-I_{6n})\operatorname{vec}(U)=0.
+\]
+Stack these equations for the selected generators.  The common kernel must have
+$\QQ$-dimension $6$.
+
+Convert a $\QQ$-basis of this kernel to six vectors
+$d_1,\ldots,d_6\in L^6$ and put
+\begin{equation}
+  D_\rho=(d_1\ \cdots\ d_6)\in\operatorname{GL}_6(L).
+  \label{eq:D-rho}
+\end{equation}
+Then
+\[
+  t=D_\rho u,\qquad u\in\QQ^6,
+\]
+parametrizes the twisted source.  Exact checks are
+\[
+  \det(D_\rho)\neq0,
+  \qquad
+  M_{g_i}\sigma_i(D_\rho)=D_\rho
+  \quad\text{for every generator }g_i.
+\]
+
+\subsection{LLL reduction of the source lattice}
+
+Coefficient growth can be reduced in the same way as in Remark 5.2 of the paper.
+After computing $V_\rho^{(6)}$, form a full-rank lattice such as
+\[
+  \Lambda_\rho=V_\rho^{(6)}\cap\cO_L^6
+\]
+after clearing denominators and saturating.  Apply the Minkowski embedding and LLL
+to obtain a short $\ZZ$-basis.  Use that basis as the columns of $D_\rho$.  This does
+not alter the map; it merely replaces $u$ by a matrix in
+$\operatorname{GL}_6(\QQ)$ and tends to make small integer vectors $u$ produce much
+smaller number-field values.
+
+\section{Converting a source point to the Section 7 coordinates}
+\label{sec:coordinate-conversion}
+
+\subsection{A left inverse for $J$}
+
+Since $J$ has full column rank, choose
+\[
+  K\in\Mat_{10\times80}(\QQ),\qquad KJ=I_{10}.
+\]
+A sparse construction is preferable.  Choose ten row indices
+$I=\{i_1,\ldots,i_{10}\}$ for which the submatrix $J_I$ is invertible.  Let
+$E_I:\QQ^{80}\to\QQ^{10}$ select those entries.  Then
+\[
+  K=J_I^{-1}E_I.
+\]
+If the ten coordinates $y_1,\ldots,y_{10}$ were chosen to be ten of the signed gamma
+coordinates, $J_I=I_{10}$ and $K$ is simply the coordinate selector.
+
+\subsection{The conversion algorithm}
+
+Given $u\in\QQ^6$, execute the following steps.
+
+\begin{enumerate}[label=\textbf{P\arabic*.}]
+\item Compute
+\[
+  t=D_\rho u\in L^6.
+\]
+
+\item Test the $36$ factors in \eqref{eq:E6-discriminant}.  If any factor vanishes,
+reject $u$.
+
+\item Evaluate the forty degree-nine polynomials
+\eqref{eq:gammahat-I}--\eqref{eq:gammahat-II}, insert signs in the stored
+$80$-coordinate order, and obtain
+\[
+  x=\Gamhat(t)\in L^{80}.
+\]
+
+\item Recover the original ten coordinates
+\[
+  y=Kx\in L^{10}.
+\]
+As an optional check, verify $Jy=x$.
+
+\item Convert to the descended basis:
+\[
+  w=B_\rho^{-1}y\in L^{10}.
+\]
+
+\item Choose an index $j$ with $w_j\neq0$ and set
+\begin{equation}
+  z_i=\frac{w_i}{w_j},\qquad i=1,\ldots,10.
+  \label{eq:rational-ratios}
+\end{equation}
+Every $z_i$ lies in $\QQ$.  Coerce them exactly to rational numbers and return
+\[
+  P=[z_1:\cdots:z_{10}]\in\tM_\rho(\QQ).
+\]
+
+\item For the subsequent Clebsch calculation, use the exact fixed representative
+\[
+  y_0=B_\rho z=\frac{y}{w_j},
+  \qquad
+  x_0=Jy_0=\frac{x}{w_j}.
+\]
+Extract the designated forty positive gamma entries from $x_0$.  Their power-sum
+expressions give rational Clebsch invariants exactly as in the original algorithm.
+\end{enumerate}
+
+\subsection{Why the ratios are rational}
+
+Let $\sigma\in\Gal(L/\QQ)$ and $g=\rho(\sigma)$.  Since
+$t=D_\rho u$ is fixed by the twisted source action and the cusp map is
+$W(E_6)$-equivariant, the gamma point satisfies the projective descent relation.
+With the convention used here, there is a scalar $c_\sigma\in L^\times$ such that
+\[
+  P_g\sigma(x)=c_\sigma x.
+\]
+Because $x=Jy$ and $P_gJ=JR_g$, injectivity of $J$ gives
+\[
+  R_g\sigma(y)=c_\sigma y.
+\]
+Write $y=B_\rho w$.  The columns of $B_\rho$ are exact fixed vectors, so
+\[
+  R_g\sigma(B_\rho)=B_\rho.
+\]
+It follows that
+\[
+  \sigma(w)=c_\sigma w.
+\]
+Therefore
+\[
+  \sigma\left(\frac{w_i}{w_j}\right)=\frac{w_i}{w_j}
+\]
+for every $\sigma$, proving $w_i/w_j\in\QQ$.  This argument is why the raw gamma
+vector need only satisfy projective, rather than vector, equivariance.
+
+\section{The modified version of Algorithm 5.1}
+\label{sec:modified-algorithm}
+
+\subsection{Universal precomputation}
+
+Compute once:
+
+\begin{enumerate}
+\item the forty gamma labels, the convention sign mask $\eta$, and the $80$
+signed-label order;
+\item $J$, the ten-dimensional matrices $R_g$, and optionally the thirty universal
+cubic relations, as in the paper;
+\item the six Pinkham generator matrices and a word map that evaluates the same
+abstract $W(E_6)$ element in dimensions $80$, $10$, and $6$;
+\item an evaluator for \eqref{eq:gammahat-I} and \eqref{eq:gammahat-II}
+that applies the stored sign mask \eqref{eq:stored-sign-mask};
+\item a left inverse $K$ of $J$.
+\end{enumerate}
+
+\subsection{Instance-specific computation}
+
+Given $(L,G,\rho)$:
+
+\begin{enumerate}[label=\textbf{Step \arabic*.}]
+\item Compute the same generator/automorphism pairs $(g_i,\sigma_i)$ as in
+Algorithm 5.1.
+
+\item Compute $B_\rho$ from the ten-dimensional semilinear fixed equations, exactly
+as in Section 7.
+
+\item Evaluate the words for $g_i$ in the six-dimensional representation to obtain
+$M_{g_i}$, and solve \eqref{eq:source-matrix-system} to obtain $D_\rho$.
+
+\item Enumerate primitive vectors $u\in\ZZ^6$ by increasing height.  For each one,
+apply steps P1--P6 of \cref{sec:coordinate-conversion}.  Reject $u$ if it lies on a
+root hyperplane.
+
+\item Optionally verify that the returned rational point $z$ satisfies the thirty
+descended cubics.  These cubics are no longer needed to find $z$.
+
+\item Use $x_0=JB_\rho z$ to compute the forty exact gamma values, the Clebsch
+vector $[A:B:C:D:E]$, the pentahedral quintic, and the trace cubic of Algorithm
+A.10.
+
+\item If $E=0$, the pentahedral quintic is inseparable, or the resulting cubic is
+singular, continue with the next vector $u$.
+\end{enumerate}
+
+\subsection{Language-neutral pseudocode}
+
+\begin{lstlisting}
+function PointFromA6(instance_data, universal_data):
+    # Existing Section 7 objects:
+    # B_rho, J, K, gamma_sign_mask, signed_gamma_order,
+    # Clebsch formulas
+    # New object:
+    # D_rho, obtained from the 6-dimensional fixed equations
+
+    for u in primitive_integer_vectors_by_height(6):
+        t = D_rho * u                         # vector in L^6
+
+        if any_E6_root_factor_is_zero(t):
+            continue
+
+        gamma40_can = canonical_normalized_cusp_gammas(t)
+        gamma40 = apply_sign_mask(gamma40_can, gamma_sign_mask)
+        x = insert_signed_coordinates(gamma40)
+        y = K * x
+
+        assert J * y == x
+
+        w = inverse(B_rho) * y
+        j = first_nonzero_coordinate(w)
+        z = [w[i] / w[j] for i in 1..10]
+
+        if not all_entries_are_exactly_rational(z):
+            error("action convention or coordinate ordering mismatch")
+
+        z = coerce_to_Q(z)
+        x_exact = J * B_rho * z
+
+        # Optional certificate:
+        assert all(descended_cubic(z) == 0)
+
+        clebsch = clebsch_from_positive_gammas(x_exact)
+        if clebsch.E == 0:
+            continue
+
+        surface = algorithm_A10(clebsch)
+        if surface_failed or surface_is_singular(surface):
+            continue
+
+        return z, surface
+\end{lstlisting}
+
+\section{Direct integration with \texttt{c9\_example.m}}
+\label{sec:magma-integration}
+
+The authors' example already contains nearly all universal objects:
+
+\begin{itemize}
+\item \texttt{all\_gamma(mat)} evaluates the forty raw gamma coordinates;
+\item \texttt{bm} is a $10\times40$ row-basis matrix for their span;
+\item \texttt{se} gives the forty linear forms in ten coordinates;
+\item \texttt{mat\_l} contains the three $40\times40$ gamma matrices for the
+Cremona generator, the six-cycle, and the transposition;
+\item \texttt{z\_bm\_o\_10} and \texttt{para} encode the descended ten-dimensional
+basis.
+\end{itemize}
+
+A minimally invasive patch has the following structure.
+
+\begin{enumerate}
+\item Store the three source matrices
+$M_{\mathrm{cr}},M_{\mathrm{cyc}},M_{\mathrm{sw}}$ from
+\cref{sec:pinkham-action}.
+
+\item Whenever an element of the subgroup is constructed, retain a word in the
+three generators.  Evaluate the word both in \texttt{mat\_l} and in the three source
+matrices.  This gives the matching $40$- and $6$-dimensional matrices without a
+group-identification problem.
+
+\item Construct the six-dimensional semilinear fixed space in exact analogy with
+the block-matrix construction used for the ten-dimensional lattice.  Its rank is six.
+Apply LLL if desired and convert the result to $D_\rho$.
+
+\item Delete the nested ten-variable point search.  Enumerate six integers, form
+$t=D_\rho u$, and build the $6\times3$ matrix with rows
+\[
+  (t_i,t_i^3,1).
+\]
+The existing \texttt{all\_gamma} function may be used directly.  Divide its output
+by
+\[
+  \prod_{i<j}(t_j-t_i)
+\]
+to obtain normalized values in exactly the authors' sign convention.  After this
+version passes all checks, one may replace it by the degree-nine product formulas,
+provided the universal sign mask \eqref{eq:stored-sign-mask} is applied.
+
+\item Solve for the original ten coordinates using \texttt{bm}, then solve for the
+descended coordinates using the matrix encoded by \texttt{para}.  Normalize one
+nonzero descended coordinate to $1$ and verify that the remaining ratios are
+rational.
+
+\item Map the rational descended vector forward through \texttt{para} and
+\texttt{se}.  Use this exact fixed gamma representative in the existing power-sum
+and Clebsch code.
+\end{enumerate}
+
+\begin{summarybox}
+\textbf{Row-vector warning.}
+The paper's example uses expressions of the form
+\texttt{row * bm} and therefore transposes several matrices relative to the column
+convention in this note.  Translate the equations structurally, not by copying the
+transpose symbols.  The two decisive tests are that the six-dimensional fixed space
+has dimension $6$ and that the final descended ratios are fixed by every field
+automorphism.
+\end{summarybox}
+
+\section{Existence, dominance, and termination of the search}
+
+\subsection{Why every twist receives such a map}
+
+The untwisted map
+\[
+  f:\Aff^6\dashrightarrow\tcM
+\]
+is dominant and $W(E_6)$-equivariant \cite[Lemma 6.1]{DR-PR}.  Twisting both sides
+by the cocycle $\rho$ gives a dominant rational map
+\[
+  f_\rho:{}^\rho\Aff^6\dashrightarrow\tcM_\rho.
+\]
+The twist of a linear representation is a six-dimensional $\QQ$-vector space; the
+matrix $D_\rho$ explicitly identifies it with $\Aff^6_\QQ$.  Formula
+\eqref{eq:main-map} is the Coble-coordinate realization of this twisted map.
+Dominance may be checked after base change to $L$, where it becomes the original
+map composed with the invertible linear change of variables $D_\rho$.
+
+It follows that
+\[
+  \tcM_\rho(\QQ)
+\]
+is Zariski dense.  In particular, the point sought in Algorithm 5.1 always exists.
+The earlier bounded search could fail only because its chosen height bound was too
+small.
+
+\subsection{Why exhaustive integer enumeration terminates}
+
+The pullback of the boundary is contained in the zero set of
+\[
+  \deltaE(D_\rho u)\in L[u_1,\ldots,u_6],
+\]
+a nonzero polynomial.  Hence rational vectors avoiding the boundary are Zariski
+dense in $\Aff^6_\QQ$.
+
+The conditions $E=0$, $\Delta=0$, and $F=0$ used in the paper define proper
+divisors in the target.  Since $\Phi_\rho$ is dominant, their pullbacks are proper
+closed subsets of $\Aff^6$.  Therefore an enumeration of primitive integer vectors
+that is exhaustive by height must eventually find a vector avoiding the root
+hyperplanes and all three downstream failure loci.  No useful small universal
+height bound follows from this argument, but the search is no longer heuristic in
+principle.
+
+\section{Certification and debugging checklist}
+
+A robust exact implementation should perform the following checks.
+
+\subsection{Universal checks}
+
+\begin{enumerate}
+\item Verify the Coxeter relations for the six matrices $M_{s_i}$.
+\item For random $t\in V^\circ(\QQ)$ and every universal generator, verify
+\[
+  [\Gamhat(M_gt)]=[P_g\Gamhat(t)].
+\]
+\item Verify the canonical degree-nine formulas against determinant evaluation:
+\[
+  \Gamma^{\mathrm{can}}_{40}(t)
+  =\Deltav(t)\Gamhat^{\mathrm{can}}_{40}(t).
+\]
+Then verify the stored evaluator using the sign mask:
+\[
+  \Gamma^{\mathrm{st}}_{40}(t)
+  =\Deltav(t)\Gamhat^{\mathrm{st}}_{40}(t).
+\]
+\item Verify $KJ=I_{10}$ and $P_gJ=JR_g$.
+\item If constructing the normalized signed action symbolically, verify all Coxeter
+relations for the resulting signed permutation matrices.
+\end{enumerate}
+
+\subsection{Instance checks}
+
+\begin{enumerate}
+\item The ten-dimensional fixed space has dimension $10$ and
+$\det(B_\rho)\neq0$.
+\item The six-dimensional fixed space has dimension $6$ and
+$\det(D_\rho)\neq0$.
+\item For every generator,
+\[
+  M_{g_i}\sigma_i(D_\rho)=D_\rho,
+  \qquad
+  R_{g_i}\sigma_i(B_\rho)=B_\rho,
+\]
+with the chosen convention.
+\item For a candidate $u$, verify all $36$ root factors are nonzero.
+\item Verify $Jy=x$ after $y=Kx$.
+\item Verify all ratios in \eqref{eq:rational-ratios} lie in $\QQ$ exactly.  Failure
+here almost always indicates an inverse, transpose, gamma-order, convention-sign-mask, or signed-label
+mismatch.
+\item Verify $x_0=JB_\rho z$ is exactly fixed under the $80$-coordinate descent.
+\item If the thirty descended cubics were computed, verify that all vanish at $z$.
+\item Verify the Clebsch quantities computed from $x_0$ are rational and that the
+final cubic is smooth.
+\item For a final independent check, compute the $27$ lines and their Galois action.
+\end{enumerate}
+
+\section{Practical refinements}
+
+\subsection{Evaluate products, not determinants}
+
+The formulas \eqref{eq:gammahat-I} and \eqref{eq:gammahat-II} need only additions,
+subtractions, and products in $L$.  They avoid $6\times6$ determinants and reduce
+the total degree from $24$ to $9$.  Precompute the following arrays for each $t$:
+\[
+  d_{ij}=t_j-t_i\quad(i<j),
+\]
+\[
+  s_{ijk}=t_i+t_j+t_k\quad(i<j<k),
+  \qquad s_{[6]}=t_1+\cdots+t_6.
+\]
+Every normalized gamma coordinate is then a product of nine entries from these
+arrays.
+
+\subsection{Search order}
+
+After LLL reduction of the source lattice, enumerate primitive vectors by increasing
+\[
+  \|u\|_\infty=\max_i|u_i|
+\]
+or by increasing Euclidean norm.  Test the $36$ root factors before any gamma
+evaluation.  Since the map is homogeneous of degree $9$ in $t$, scalar multiples of
+$u$ give the same projective gamma point; primitive vectors avoid redundant work.
+
+\subsection{Do not invert $B_\rho$ repeatedly}
+
+Compute $B_\rho^{-1}$ once.  Better still, solve the linear system
+$B_\rho w=y$ for each candidate using a stored decomposition.  The same applies to
+$K$ if it was not chosen as a selector.
+
+\subsection{Use the exact fixed representative downstream}
+
+The raw source evaluation $x=\Gamhat(D_\rho u)$ is generally only projectively
+fixed relative to the particular signed lift $P_g$ used in Section 7.  Do not coerce
+its power sums individually to $\QQ$.  First compute $z$ from the coordinate ratios,
+then replace $x$ by
+\[
+  x_0=JB_\rho z.
+\]
+This vector is exactly fixed and is the correct input to the Clebsch formulas.
+
+\section{Canonical enumeration of the forty labels}
+\label{sec:ordering}
+
+A convenient abstract ordering is as follows.
+
+\subsection{Ten type-I labels}
+
+Enumerate all three-element subsets $I\subseteq\{1,\ldots,6\}$ containing $1$.
+For each, use the unordered label $I\mid I^c$.  This gives ten labels.
+
+\subsection{Thirty type-II labels}
+
+Enumerate the fifteen perfect matchings of $\{1,\ldots,6\}$.  Sort the three pairs
+lexicographically as $A<B<C$.  For each matching include the two cyclic
+orientations
+\[
+  A\to B\to C,
+  \qquad
+  A\to C\to B.
+\]
+This gives thirty labels.
+
+\subsection{The ordering in the authors' example}
+
+The function \texttt{all\_gamma} in \texttt{c9\_example.m} places the thirty
+type-II coordinates first and the ten type-I coordinates second.  In one-based
+pseudocode, its type-II part is:
+
+\begin{lstlisting}
+for i,j,k,l,m in {2,...,6} with all five distinct:
+    if j < k and l < m:
+        A = {1,i}; B = {j,k}; C = {l,m}
+        append gamma(A -> B -> C)
+\end{lstlisting}
+
+Its type-I part is:
+
+\begin{lstlisting}
+for i,j,k,l,m in {2,...,6} with all five distinct:
+    if i < j and k < l and l < m:
+        I  = {1,i,j}
+        Ic = {k,l,m}
+        append gamma(I | Ic)
+\end{lstlisting}
+
+These loops reproduce the authors' \emph{coordinate order}.  To reproduce their
+coordinate signs as well, apply the mask \eqref{eq:stored-sign-mask}.  It can be
+calibrated by \eqref{eq:sign-calibration}, or computed directly as follows: for each
+entry returned by \texttt{gamma\_3}, take the product of the signs of the
+permutations that sort the six row-index triples used by that routine.  Thus no
+coordinate permutation is required, but the sign calibration must not be omitted.
+The existing \texttt{all\_gamma} routine automatically supplies the correct signs;
+dividing its output by $\Deltav$ is therefore the safest first implementation.
+
+\section{A compact data-flow diagram}
+
+The complete replacement for the nonlinear point search is
+\[
+\boxed{
+\begin{array}{c}
+ (g_i,\sigma_i),\ M_{g_i}
+ \\[-1mm]
+ \Downarrow\ \text{six-dimensional semilinear fixed equations}
+ \\[-1mm]
+ D_\rho\in\operatorname{GL}_6(L)
+ \\[-1mm]
+ \Downarrow\ u\in\ZZ^6\mapsto t=D_\rho u
+ \\[-1mm]
+ \Gamhat(t)\in L^{80}
+ \\[-1mm]
+ \Downarrow\ K
+ \\[-1mm]
+ y\in L^{10}
+ \\[-1mm]
+ \Downarrow\ B_\rho^{-1}\text{ and projective normalization}
+ \\[-1mm]
+ z\in\QQ^{10},\quad [z]\in\tcM_\rho(\QQ)
+ \\[-1mm]
+ \Downarrow\ JB_\rho z
+ \\[-1mm]
+ \text{exact gamma values}\to[A:B:C:D:E]\to\text{Algorithm A.10}.
+\end{array}}
+\]
+
+\section{Final assessment}
+
+The map can be made explicit enough for direct implementation.  The essential new
+facts are:
+
+\begin{enumerate}
+\item Pinkham's reflection formula gives rational $6\times6$ matrices for the same
+$W(E_6)$ elements already used in Algorithm 5.1.
+\item On the cuspidal cubic, every Coble gamma coordinate has a common Vandermonde
+factor.  Dividing it out gives the explicit degree-nine formulas
+\eqref{eq:gammahat-I} and \eqref{eq:gammahat-II}.
+\item Twisting the six-dimensional source is the same kind of rational linear
+algebra already used for the ten-dimensional ambient space.
+\item Formula \eqref{eq:main-map} converts any regular source parameter into a
+rational point of the descended compactification; in fact it lands in the open
+marked moduli space.
+\item Dominance guarantees that exhaustive six-variable enumeration eventually
+avoids every boundary and reconstruction failure divisor.
+\end{enumerate}
+
+The only delicate implementation issue is convention alignment among the abstract
+Weyl-group word, its action on the six parameters, and its action on the signed
+gamma coordinates.  The generator-level projective equivariance test and the
+rational-ratio test isolate this issue immediately.
+
+\begin{thebibliography}{9}
+
+\bibitem{EJ}
+A.-S. Elsenhans and J. Jahnel,
+\emph{Moduli spaces and the inverse Galois problem for cubic surfaces},
+Trans. Amer. Math. Soc. \textbf{367} (2015), no.~11, 7837--7861;
+\href{https://arxiv.org/abs/1209.5591}{arXiv:1209.5591}.
+
+\bibitem{DR-PR}
+A. Duncan and Z. Reichstein,
+\emph{Pseudo-reflection groups and essential dimension},
+arXiv:1307.5724, especially Lemma~6.1.
+
+\bibitem{DR-versality}
+A. Duncan and Z. Reichstein,
+\emph{Versality of algebraic group actions and rational points on twisted varieties},
+J. Algebraic Geom. \textbf{24} (2015), 499--530;
+\href{https://arxiv.org/abs/1109.6093}{arXiv:1109.6093}.
+
+\bibitem{Pinkham}
+H. Pinkham,
+\emph{R\'esolution simultan\'ee de points doubles rationnels},
+in \emph{S\'eminaire sur les singularit\'es des surfaces},
+Lecture Notes in Math. \textbf{777}, Springer, 1980, 179--203;
+see especially pp.~196--198.
+
+\bibitem{EJcode}
+J. Jahnel,
+\emph{c9\_example.m: Magma example for Algorithm 5.1},
+authors' supplementary webpage,
+\url{https://wwwuser.gwdguser.de/~jjahnel/Arbeiten/Kub_Fl/c9_example.m}.
+
+\end{thebibliography}
+
+\end{document}
