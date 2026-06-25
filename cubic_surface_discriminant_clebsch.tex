@@ -1,0 +1,90 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=1.15in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+\newtheorem*{proposition}{Proposition}
+
+\title{The Cubic Surface Discriminant in Clebsch--Salmon Invariants}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+Let $S \subset \mathbf P^3$ be a cubic surface over a field of characteristic zero,
+and let
+\[
+(A,B,C,D,E)=(I_8,I_{16},I_{24},I_{32},I_{40})
+\]
+denote the Clebsch--Salmon invariants in the standard normalization.  The
+Clebsch-normalized discriminant is the following weighted homogeneous polynomial
+of degree $32$ in the coefficients of the cubic surface.
+
+\begin{proposition}
+With the above normalization,
+\[
+\boxed{\
+\Delta_{\mathrm{Cl}}
+= (A^2-64B)^2 - 2^{11}(8D+AC).
+}
+\]
+Equivalently,
+\[
+\Delta_{\mathrm{Cl}}
+= A^4 - 128A^2B + 4096B^2 - 2048AC - 16384D.
+\]
+In particular, the invariant $E$ does not enter the formula.
+\end{proposition}
+
+For comparison with the pentahedral form, write a general cubic surface as
+\[
+S_{(a_0,\ldots,a_4)}:\qquad
+\sum_{i=0}^4 a_i X_i^3=0,\qquad \sum_{i=0}^4 X_i=0,
+\]
+and let $\sigma_j$ be the elementary symmetric polynomial of degree $j$ in
+$a_0,\ldots,a_4$.  In this convention the fundamental invariants are
+\[
+A=\sigma_4^2-4\sigma_3\sigma_5,
+\qquad
+B=\sigma_1\sigma_5^3,
+\qquad
+C=\sigma_4\sigma_5^4,
+\qquad
+D=\sigma_2\sigma_5^6,
+\qquad
+E=\sigma_5^8.
+\]
+Substitution gives exactly the discriminant formula above; this is Lemma 2.6
+of Elsenhans--Jahnel \cite{EJ}.  They also note that the formula is classical,
+due to Salmon, but that the version printed by Salmon contained a misprint later
+corrected by Edge \cite{Edge}.
+
+Thus, in this normalization, $S$ is singular precisely when
+\[
+\Delta_{\mathrm{Cl}}=0.
+\]
+If instead one uses the resultant-normalized discriminant of the quaternary cubic
+form, the expression above must be multiplied by the fixed nonzero scalar dictated
+by that normalization.
+
+\begin{thebibliography}{9}
+
+\bibitem{EJ}
+A.-S. Elsenhans and J. Jahnel,
+\emph{The discriminant of a cubic surface},
+Geom. Dedicata \textbf{159} (2012), 29--40.
+\href{https://doi.org/10.1007/s10711-011-9643-7}{doi:10.1007/s10711-011-9643-7}.
+
+\bibitem{Edge}
+W. L. Edge,
+\emph{The discriminant of a cubic surface},
+Proc. Roy. Irish Acad. Sect. A \textbf{80} (1980), 75--78.
+
+\end{thebibliography}
+
+\end{document}

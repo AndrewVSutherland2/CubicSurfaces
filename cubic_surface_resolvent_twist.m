@@ -32,7 +32,7 @@ Z := IntegerRing();
 
 ring_z4<x,y,z,w> := PolynomialRing(IntegerRing(),4);
 
-CobleDataRF := recformat<we6, bm, se, rel3, mon3, r10, mat_l>;
+CobleDataRF := recformat<we6, bm, se, rel3, mon3, r10, mat_l, mu6, phi6>;
 CubicTwistResultRF := recformat<
     surface,
     surface_unreduced,
@@ -145,6 +145,29 @@ RandomGeneralBlowupPointList := function()
     return a, g;
 end function;
 
+PinkhamGeneratorMatrices := function()
+    /* Pinkham's six-dimensional reflection representation of W(E6) on the six
+       cuspidal parameters t = (t_1,...,t_6), for the three generators used below
+       to build mat_l: the Cremona transformation (bo -> bo2), the 6-cycle of the
+       points (bo -> bo3), and the (1,2)-transposition (bo -> bo4).  The first is
+       Pinkham's reflection s_1 (the quadratic transformation centred at the first
+       three points); the other two are the corresponding coordinate permutations.
+       These are calibrated once -- and only need to be -- by the projective
+       equivariance against all_gamma evaluated on the cuspidal points
+       cusp(t) = [ (t_k, t_k^3, 1) ]_{k=1..6}:
+            all_gamma(cusp(M_i t))  ~  mat_l[i] . all_gamma(cusp(t))   in P^39.
+       They underlie the A^6 cuspidal point producer (SearchRationalPointViaA6),
+       a dominant rational map A^6 -> moduli that replaces the heuristic search. */
+    Mcr := (1/(Q!3)) * Matrix(Q, 6, 6, [
+        [ 1,-2,-2, 0, 0, 0], [-2, 1,-2, 0, 0, 0], [-2,-2, 1, 0, 0, 0],
+        [ 1, 1, 1, 3, 0, 0], [ 1, 1, 1, 0, 3, 0], [ 1, 1, 1, 0, 0, 3] ]);
+    Mcyc := Matrix(Q, 6, 6, [
+        [0,1,0,0,0,0],[0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1],[1,0,0,0,0,0] ]);
+    Msw := Matrix(Q, 6, 6, [
+        [0,1,0,0,0,0],[1,0,0,0,0,0],[0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1] ]);
+    return [Mcr, Mcyc, Msw];
+end function;
+
 BuildUniversalCobleData := function(: InterpolationPoints := 300,
                                       RandomSeed := 1,
                                       Print := true)
@@ -202,9 +225,17 @@ BuildUniversalCobleData := function(: InterpolationPoints := 300,
     we6 := sub<GL(40,Z) | mat_l>;
     error if not (Order(we6) eq 51840), "The generated group is not W(E6) of order 51840";
 
+    if Print then printf "Constructing Pinkham's 6-dimensional source representation\n"; end if;
+    mu6 := PinkhamGeneratorMatrices();
+    /* the same abstract Weyl element in the 40-dim and the 6-dim representations;
+       phi6(psi(sigma)) is the 6x6 matrix paired with the 10x10 Weyl matrix in the
+       two semilinear descents.  Well-defined because <mu6> is a faithful copy of
+       W(E6) with matching generators (checked: |<mu6>| = 51840). */
+    phi6 := hom< we6 -> sub<GL(6,Q) | mu6> | mu6 >;
+
     return rec<CobleDataRF | we6 := we6, bm := bm, se := se,
                             rel3 := rel3, mon3 := mon3, r10 := r10,
-                            mat_l := mat_l>;
+                            mat_l := mat_l, mu6 := mu6, phi6 := phi6>;
 end function;
 
 /* ------------------------------------------------------------------------- */
@@ -359,6 +390,70 @@ DescendedBasisConcrete := function(K, autos, perms, psi, bm : LLLReduce := true,
 end function;
 
 /* ------------------------------------------------------------------------- */
+/* The six-dimensional source descent for the A^6 cuspidal point producer.    */
+/*                                                                            */
+/* Pinkham's reflection representation mu : W(E6) -> GL_6(Q) on the six cusp   */
+/* parameters is twisted by the SAME cocycle rho as the ambient P^9 descent.   */
+/* Its fixed space                                                            */
+/*                                                                            */
+/*     V_rho^(6) = { t in L^6 : M_{rho(sigma)} . sigma(t) = t  for all sigma } */
+/*                                                                            */
+/* is a six-dimensional Q-vector space identifying the affine-space twist with */
+/* A^6_Q.  This mirrors DescendedBasisConcrete verbatim (same inverse-auto-    */
+/* morphism pairing) with the 6x6 matrices phi6(psi(g)) in place of the 10x10  */
+/* Weyl matrices, so a fixed t maps -- under all_gamma on the cusp -- to a y   */
+/* projectively fixed by exactly the ten-dimensional descent conditions.       */
+/* ------------------------------------------------------------------------- */
+
+SourceDescendedBasis := function(K, autos, perms, psi, phi6 : LLLReduce := true, Print := true)
+    d  := Degree(K);
+    aa := K.1;
+    N  := 6*d;
+    Sd := Universe(perms);
+    PK := sub<Sd | perms>;
+    gens := [ Sd | g : g in Generators(PK) | g ne Id(Sd) ];
+
+    constraintRows := [];
+    for g in gens do
+        idx := Index(perms, g);
+        error if not (idx ne 0), "Could not match a Galois generator to an automorphism";
+        au := Inverse(autos[idx]);            /* same datum as the 10-dim descent */
+        Mg := ChangeRing(phi6(psi(g)), Q);    /* 6x6 avatar of the Weyl element   */
+        Sa := Transpose(Matrix(Q, d, d, [ Eltseq(au(aa)^(b-1)) : b in [1..d] ]));
+        AmI := ZeroMatrix(Q, N, N);
+        for b := 1 to d do
+            for j := 1 to 6 do
+                p := (b-1)*6 + j;
+                for c := 1 to d do
+                    for i := 1 to 6 do
+                        AmI[(c-1)*6+i, p] +:= Sa[c,b]*Mg[i,j];
+                    end for;
+                end for;
+            end for;
+        end for;
+        AmI := AmI - IdentityMatrix(Q, N);
+        constraintRows cat:= [AmI[r] : r in [1..N]];
+    end for;
+
+    fixed := #constraintRows eq 0 select VectorSpace(Q, N)
+                                   else  Kernel(Transpose(Matrix(constraintRows)));
+    error if not (Dimension(fixed) eq 6),
+        Sprintf("Source fixed space has dimension %o, not 6", Dimension(fixed));
+
+    BF := BasisMatrix(fixed);
+    if LLLReduce then
+        /* short basis -> small integer u give small-height surfaces downstream */
+        BF := LLLReduceRationalRowBasis(BF);
+    end if;
+
+    Drho := [];
+    for r := 1 to 6 do
+        Append(~Drho, [ K![ BF[r][(b-1)*6 + j] : b in [1..d] ] : j in [1..6] ]);
+    end for;
+    return Drho;
+end function;
+
+/* ------------------------------------------------------------------------- */
 /* Descending the cubic relation space.                                       */
 /*                                                                            */
 /* The thirty universal cubics F in the ten Coble coordinates y are pulled    */
@@ -479,6 +574,98 @@ SearchRationalPoint := function(kub_des : MaxSlices := 210, RandomSlices := 300,
     return false, [];
 end function;
 
+SearchRationalPointViaA6 := function(Drho, Brho, K, bm : HeightBound := 4,
+                                     MaxCandidates := 12, Score := false, Print := true)
+    /* The dominant A^6 cuspidal-cubic map, replacing the heuristic slicing search
+       of SearchRationalPoint.  For an integer vector u, t = sum_r u_r Drho[r] is a
+       Galois-twisted ordered six-point configuration on the cuspidal cubic; its
+       Coble gamma coordinates all_gamma(cusp(t)) (cusp(t) has rows (t_k,t_k^3,1))
+       give a vector y in K^10 that is, automatically, a scalar multiple of a
+       Q-rational point z of the twisted moduli space -- the ambient ratios are
+       rational by construction (Hilbert 90), so NO descended cubics and NO
+       four-fold search are needed.  Because the map is dominant, the degenerate
+       loci (the 36 root hyperplanes, E = 0, singular surfaces) are proper closed
+       subsets, so a generic small u yields a smooth marked surface.
+
+       The map is high-degree, so different u give surfaces of widely different
+       height and the downstream lattice minimisation is very sensitive to it.  We
+       therefore enumerate u by increasing height (sparser vectors first), collect
+       the first MaxCandidates points that Score accepts -- Score(z) returns a
+       nonnegative cost (here the bit-height of the Clebsch invariants) or a
+       negative value to reject a degenerate z -- and return the lowest-cost one, as
+       a primitive integer representative.  This keeps the reconstructed surface,
+       and its minimisation, small and predictable. */
+    useScore := Type(Score) ne BoolElt;
+
+    /* a sparse left inverse of bm: pick ten independent gamma coordinates so that
+       y = (those ten gammas) * bmIinv recovers the ten Coble coordinates.  Row-of-
+       sequences construction (NOT a flat double comprehension, which Magma fills in
+       column-major order and would silently transpose the matrix). */
+    cols := []; Msel := ZeroMatrix(Q, 10, 0);
+    for j := 1 to 40 do
+        Mtry := HorizontalJoin(Msel, Matrix(Q, 10, 1, [bm[r,j] : r in [1..10]]));
+        if Rank(Mtry) eq Ncols(Mtry) then Msel := Mtry; Append(~cols, j); end if;
+        if #cols eq 10 then break; end if;
+    end for;
+    bmIinv  := ChangeRing(Matrix(Q, [[bm[r,cols[c]] : c in [1..10]] : r in [1..10]])^-1, K);
+    BmatInv := Matrix(K, [Brho[a] : a in [1..10]])^-1;   /* rows are Brho[a] */
+
+    a6 := function(u)
+        t := [ &+[ u[r]*Drho[r][j] : r in [1..6] ] : j in [1..6] ];
+        for i := 1 to 6 do for j := i+1 to 6 do
+            if t[i]-t[j] eq 0 then return false, []; end if; end for; end for;
+        for i := 1 to 6 do for j := i+1 to 6 do for k := j+1 to 6 do
+            if t[i]+t[j]+t[k] eq 0 then return false, []; end if; end for; end for; end for;
+        if &+t eq 0 then return false, []; end if;
+        gam := all_gamma(Matrix(K, 6, 3, [[t[i], t[i]^3, 1] : i in [1..6]]));
+        if not &and[ gam[c] ne 0 : c in cols ] then return false, []; end if;
+        y := Vector(K, [gam[c] : c in cols]) * bmIinv;
+        w := y * BmatInv;
+        jw := 0; for a := 1 to 10 do if w[a] ne 0 then jw := a; break; end if; end for;
+        if jw eq 0 then return false, []; end if;
+        zq := [];
+        for a := 1 to 10 do
+            okc, r := IsCoercible(Q, w[a]/w[jw]);
+            if not okc then return false, []; end if;   /* ratios must be rational */
+            Append(~zq, r);
+        end for;
+        /* primitive integer representative of the projective point */
+        den := LCM([ Denominator(x) : x in zq ]);
+        zz  := [ Z!(den*x) : x in zq ];
+        gg  := GCD(zz);
+        return true, [ Q!(x div gg) : x in zz ];
+    end function;
+
+    if Print then printf "Producing rational points via the A^6 cuspidal map (height <= %o)\n", HeightBound; end if;
+    found := 0; bestcost := -1; bestz := []; bestu := [];
+    for B := 1 to HeightBound do
+        /* shell of sup-norm exactly B, primitive vectors, sparser ones first */
+        shell := [ [u[i] : i in [1..6]] : u in CartesianPower([-B..B], 6) ];
+        shell := [ u : u in shell | Max([Abs(x) : x in u]) eq B and GCD(u) eq 1 ];
+        Sort(~shell, func< a, b | &+[Abs(x):x in a] - &+[Abs(x):x in b] >);
+        for u in shell do
+            okp, zq := a6(u);
+            if not okp then continue; end if;
+            sc := useScore select Score(zq) else 0;
+            if sc lt 0 then continue; end if;
+            found +:= 1;
+            if bestcost lt 0 or sc lt bestcost then
+                bestcost := sc; bestz := zq; bestu := u;
+            end if;
+            if found ge MaxCandidates then break B; end if;
+        end for;
+    end for;
+
+    if bestcost lt 0 then
+        if Print then printf "  no smooth surface produced up to height %o\n", HeightBound; end if;
+        return false, [];
+    end if;
+    if Print then
+        printf "  selected u = %o (cost %o) from %o candidate(s)\n", bestu, bestcost, found;
+    end if;
+    return true, bestz;
+end function;
+
 ClebschInvariantsConcrete := function(sol, Brho, K, bm : Print := true)
     /* From a rational point z = sol on the descended twist, reconstruct the
        forty gamma coordinates over K, form the even power sums
@@ -586,6 +773,8 @@ CubicSurfaceFromSubgroup := function(Gwe6, f : Universal := false,
                                              Iso := false,
                                              HeightBound := 2,
                                              Point := false,
+                                             UseA6 := true,
+                                             A6HeightBound := 4,
                                              RandomSlices := 300,
                                              RandomBound := 2,
                                              RandomSeed := 1,
@@ -594,6 +783,7 @@ CubicSurfaceFromSubgroup := function(Gwe6, f : Universal := false,
                                              LLLReduceBasis := true,
                                              ReturnTwistOnly := false,
                                              DoMinimizeReduce := true,
+                                             FullMinimize := false,
                                              Print := true)
     Udata := Universal;
     if Type(Udata) eq BoolElt then
@@ -635,51 +825,82 @@ CubicSurfaceFromSubgroup := function(Gwe6, f : Universal := false,
     Brho := DescendedBasisConcrete(K, autos, perms, psi, Udata`bm
                                    : LLLReduce := LLLReduceBasis, Print := Print);
 
-    if Print then printf "Descending the 30 cubic relations\n"; end if;
-    kub_des := DescendCubicsConcrete(Udata`rel3, Brho, K, Udata`bm, Udata`mon3 : Print := Print);
-
-    if ReturnTwistOnly then
-        return rec<CubicTwistResultRF |
-            surface := false,
-            surface_unreduced := false,
-            invariants := false,
-            pentahedral_quintic := false,
-            point := false,
-            descended_cubics := kub_des,
-            basis_matrix := Brho,
-            orbit_data := false,
-            subgroup := Gwe6,
-            galois_group := P,
-            universal := Udata>;
-    end if;
-
     /* A point on the projective closure of the twist need not lie in the open
        locus of smooth marked surfaces with a proper pentahedron.  We reject any
        candidate whose Clebsch vector has E = 0 (improper pentahedron), whose
        pentahedral quintic is inseparable (an Eckardt point / nontrivial
        automorphism), or whose reconstructed cubic surface is singular (the
        discriminant may vanish even when E != 0), and keep searching, exactly as
-       prescribed by Algorithm 5.1. */
-    okClebsch := function(s)
+       prescribed by Algorithm 5.1.  surfaceCost additionally returns the bit-height
+       of the (valid) reconstructed cubic surface -- which is built anyway for the
+       smoothness test, and is the most direct cheap proxy for the cost of the
+       downstream lattice minimisation (smaller surface => smaller discriminant =>
+       faster factoring) -- so the A^6 producer can prefer a low-height point.
+       okClebsch is the boolean validity test used by the legacy slicing search. */
+    surfaceCost := function(s)
         ii := ClebschInvariantsConcrete(s, Brho, K, Udata`bm : Print := false);
-        if ii[5] eq 0 then return false; end if;
+        if ii[5] eq 0 then return -1; end if;
         pol5 := ClebschInvariantsToPentahedralPolynomial(ii);
-        if Discriminant(pol5) eq 0 then return false; end if;
-        return IsSmoothCubicSurface(penta_pol_2_gl(pol5));
+        if Discriminant(pol5) eq 0 then return -1; end if;
+        gl := penta_pol_2_gl(pol5);
+        if not IsSmoothCubicSurface(gl) then return -1; end if;
+        return Max([ Ilog(2, Abs(c) + 1) : c in Coefficients(gl) ]);
     end function;
+    okClebsch := function(s) return surfaceCost(s) ge 0; end function;
 
-    if Type(Point) eq BoolElt then
-        okpt, sol := SearchRationalPoint(kub_des : RandomSlices := RandomSlices,
-                                                  RandomBound := RandomBound,
-                                                  RandomSeed := RandomSeed,
-                                                  Validate := okClebsch, Print := Print);
+    /* Two ways to produce a rational point of the twist.  By default we use the
+       A^6 cuspidal-cubic map: a dominant rational map from affine six-space, so a
+       generic small integer vector lands on a smooth marked surface.  This avoids
+       descending the thirty cubics and searching the four-fold entirely -- it is
+       what lets the non-cyclic / small twists succeed, where every accessible point
+       of the four-fold is degenerate.  The legacy slicing search (and validation of
+       a user-supplied Point, and ReturnTwistOnly) still run on the descended cubics
+       when UseA6 is false, a Point is supplied, or only the twist is requested. */
+    useA6 := UseA6 and (Type(Point) eq BoolElt) and (not ReturnTwistOnly);
+
+    if useA6 then
+        if Print then printf "Solving the 6-dimensional source descent\n"; end if;
+        Drho := SourceDescendedBasis(K, autos, perms, psi, Udata`phi6
+                                     : LLLReduce := LLLReduceBasis, Print := Print);
+        okpt, sol := SearchRationalPointViaA6(Drho, Brho, K, Udata`bm
+                                     : HeightBound := A6HeightBound,
+                                       Score := surfaceCost, Print := Print);
         error if not (okpt),
-            "No usable rational point found by the heuristic search "
-            * "(supply Point, raise RandomSlices, or try another polynomial)";
+            "The A^6 point producer reached its height bound without a smooth "
+            * "surface (raise A6HeightBound, or set UseA6 := false)";
+        kub_des := false;
     else
-        sol := [Q!a : a in Point];
-        error if not (#sol eq 10), "Point must have 10 coordinates";
-        error if not (&and [Evaluate(F, sol) eq 0 : F in kub_des]), "The supplied point is not on the descended twist";
+        if Print then printf "Descending the 30 cubic relations\n"; end if;
+        kub_des := DescendCubicsConcrete(Udata`rel3, Brho, K, Udata`bm, Udata`mon3 : Print := Print);
+
+        if ReturnTwistOnly then
+            return rec<CubicTwistResultRF |
+                surface := false,
+                surface_unreduced := false,
+                invariants := false,
+                pentahedral_quintic := false,
+                point := false,
+                descended_cubics := kub_des,
+                basis_matrix := Brho,
+                orbit_data := false,
+                subgroup := Gwe6,
+                galois_group := P,
+                universal := Udata>;
+        end if;
+
+        if Type(Point) eq BoolElt then
+            okpt, sol := SearchRationalPoint(kub_des : RandomSlices := RandomSlices,
+                                                      RandomBound := RandomBound,
+                                                      RandomSeed := RandomSeed,
+                                                      Validate := okClebsch, Print := Print);
+            error if not (okpt),
+                "No usable rational point found by the heuristic search "
+                * "(supply Point, raise RandomSlices, or try another polynomial)";
+        else
+            sol := [Q!a : a in Point];
+            error if not (#sol eq 10), "Point must have 10 coordinates";
+            error if not (&and [Evaluate(F, sol) eq 0 : F in kub_des]), "The supplied point is not on the descended twist";
+        end if;
     end if;
 
     if Print then printf "Using descended point %o\n", sol; end if;
@@ -690,11 +911,17 @@ CubicSurfaceFromSubgroup := function(Gwe6, f : Universal := false,
     gl2 := gl;
 
     if DoMinimizeReduce then
-        if Print then printf "Trying MinimizeReduceCubicSurface\n"; end if;
+        /* ReduceCubicSurface (LLL on the coefficients) is fast and enough to make
+           the model small and certifiable; the full MinimizeReduceCubicSurface
+           additionally seeks the minimal model, which factors the discriminant and
+           can be very slow on the high-discriminant surfaces the A^6 map produces.
+           Default to the fast reduction; FullMinimize opts into the slow minimal
+           model.  Both fall back to the unreduced form on error. */
         try
-            gl2 := MinimizeReduceCubicSurface(gl);
+            gl2 := FullMinimize select MinimizeReduceCubicSurface(gl)
+                                 else  ReduceCubicSurface(gl);
         catch e
-            if Print then printf "  MinimizeReduceCubicSurface failed; returning unreduced model\n"; end if;
+            if Print then printf "  reduction failed; returning unreduced model\n"; end if;
             gl2 := gl;
         end try;
     end if;
@@ -717,6 +944,8 @@ CubicSurfaceFromResolventPolynomial := function(classNo, f : Universal := false,
                                                            Iso := false,
                                                            HeightBound := 2,
                                                            Point := false,
+                                                           UseA6 := true,
+                                                           A6HeightBound := 4,
                                                            RandomSlices := 300,
                                                            RandomBound := 2,
                                                            RandomSeed := 1,
@@ -725,6 +954,7 @@ CubicSurfaceFromResolventPolynomial := function(classNo, f : Universal := false,
                                                            LLLReduceBasis := true,
                                                            ReturnTwistOnly := false,
                                                            DoMinimizeReduce := true,
+                                                           FullMinimize := false,
                                                            Print := true)
     Udata := Universal;
     if Type(Udata) eq BoolElt then
@@ -735,6 +965,8 @@ CubicSurfaceFromResolventPolynomial := function(classNo, f : Universal := false,
                                              Iso := Iso,
                                              HeightBound := HeightBound,
                                              Point := Point,
+                                             UseA6 := UseA6,
+                                             A6HeightBound := A6HeightBound,
                                              RandomSlices := RandomSlices,
                                              RandomBound := RandomBound,
                                              RandomSeed := RandomSeed,
@@ -743,11 +975,14 @@ CubicSurfaceFromResolventPolynomial := function(classNo, f : Universal := false,
                                              LLLReduceBasis := LLLReduceBasis,
                                              ReturnTwistOnly := ReturnTwistOnly,
                                              DoMinimizeReduce := DoMinimizeReduce,
+                                             FullMinimize := FullMinimize,
                                              Print := Print);
 end function;
 
 CubicSurfaceFromPolynomial := function(f : Universal := false,
                                            MaxClasses := 6,
+                                           UseA6 := true,
+                                           A6HeightBound := 4,
                                            RandomSlices := 300,
                                            RandomBound := 2,
                                            Print := true)
@@ -773,6 +1008,8 @@ CubicSurfaceFromPolynomial := function(f : Universal := false,
         if Print then printf "Trying subgroup class %o of %o\n", ci, #cand; end if;
         try
             return CubicSurfaceFromSubgroup(cand[ci], fz : Universal := Udata,
+                                                          UseA6 := UseA6,
+                                                          A6HeightBound := A6HeightBound,
                                                           RandomSlices := RandomSlices,
                                                           RandomBound := RandomBound,
                                                           Print := Print), ci;
