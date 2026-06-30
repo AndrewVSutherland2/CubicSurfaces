@@ -24,6 +24,7 @@ surface in `P^3`.
 | File | Description |
 |------|-------------|
 | `cubic_surface_resolvent_twist.m` | The core implementation (all entry points below), including the **A6 cuspidal-cubic point producer**. |
+| `cubic_surface_nosplit.m`         | **No-splitting-field** variant: reaches the large-`\|Gal(f)\|` classes (`A5`, `S5`, …) the field descent cannot start, via the 27-line resolvent algebra at a totally-split prime + `polredbest` (needs PARI/GP). |
 | `database_pipeline.m`             | Generator for **many** surfaces per number field — `GenerateDatabase(f, …)` (see below). |
 | `examples.m`                      | Builds and certifies the four cyclic examples `C4, C5, C9, C12`. |
 | `algorithm_5_1_explicit_A6_map.tex` | The note describing the explicit dominant `A^6 →` moduli map used to avoid the point search. |
@@ -290,6 +291,18 @@ number field, keyed by its Polredabs coefficient list); refresh it from the LMFD
   `W(E6)` classes), `C5, C9, C12, S3`.
 - **Field degree is not the blocker.** `C9` (degree-9 splitting field) reduces to
   `max|coef| = 4` in ~3 s.
+- **The large-`|Gal(f)|` classes are reachable without the splitting field
+  (`cubic_surface_nosplit.m`).** Classes like `A5` (`|Gal| = 60`) and `S5`
+  (`|Gal| = 120`) — where realizing the degree-`|Gal(f)|` field is intractable —
+  are handled by working at a totally-split prime `p` (all roots of `f` in `Z_p`),
+  forming the 27-line resolvent algebra `A_27 = ∏_j L^{H_j}` (factor degrees =
+  the `Gal`-orbit sizes on the 27 lines, each `≤ 27`) from the labelled `p`-adic
+  roots, conditioning each resolvent with PARI/GP `polredbest`, and evaluating the
+  `W(E6)`-invariant Clebsch quantities `p`-adically. `A5` and `S5` cubic surfaces
+  are produced and certified — via Frobenius cycle types on the 27 lines
+  (`LinesFrobeniusCycleTypesModQ`) — with **no degree-`|Gal|` field built**. The
+  surfaces are large (the same intrinsic `Δ_Cl` height as the minimization barrier
+  below), but these classes are now reachable at all.
 - **Open: small explicit models for "large-Clebsch" twists.** The difficulty of
   producing a *small* explicit equation is governed by the twist's
   Clebsch-invariant height (set by the descent basis), not the field degree.
