@@ -201,14 +201,18 @@ end function;
 PolredbestResolvents := function(polys, tmpdir)
     gpin := "";
     for T in polys do
-        gpin cat:= Sprintf("T=%o; v=polredbest(T,1); print(Vec(v[1])); print(Vec(lift(modreverse(v[2]))));\n",
-                           Sprint(T));
+        cs := Coefficients(T);          // constant-first; Polrev([c0,c1,..]) = sum c_i x^i
+        cstr := &cat[ Sprint(cs[i]) cat (i lt #cs select "," else "") : i in [1..#cs] ];
+        gpin cat:= "pol=Polrev([" cat cstr cat "]); v=polredbest(pol,1); "
+                 cat "print(Vec(v[1])); print(Vec(lift(modreverse(v[2]))));\n";
     end for;
     PrintFile(tmpdir cat "/nosplit_pr.gp", gpin cat "quit\n" : Overwrite);
-    rc := System("cd " cat tmpdir cat " && gp -q nosplit_pr.gp > nosplit_pr.out 2>&1");
+    rc := System("cd " cat tmpdir cat " && gp -q nosplit_pr.gp > nosplit_pr.out 2>/dev/null");
     error if rc ne 0, "PARI/GP call failed -- is `gp` on the PATH?";
     Px := Universe(polys);
-    out := [ l : l in Split(Read(tmpdir cat "/nosplit_pr.out"), "\n") | #l gt 0 ];
+    /* keep only the coefficient-vector lines ("[...]"); PARI's stderr (stack-size
+       warnings on the heavier resolvents) is discarded above. */
+    out := [ l : l in Split(Read(tmpdir cat "/nosplit_pr.out"), "\n") | #l gt 0 and l[1] eq "[" ];
     error if #out ne 2*#polys, "unexpected gp output (got " cat IntegerToString(#out) cat " lines)";
     return [ < Px ! Reverse(eval out[2*i-1]), Px ! Reverse(eval out[2*i]) > : i in [1..#polys] ];
 end function;
