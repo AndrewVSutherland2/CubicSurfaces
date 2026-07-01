@@ -1,8 +1,6 @@
 # CubicSurfaces
 
-> 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; 902 explicit smooth cubic surfaces over `Q` across 58 conjugacy classes of `W(E6)` subgroups: searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons.
->
-> 🔎 **[Browse the no-splitting-field classes →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database_nosplit.html)** &nbsp;—&nbsp; 182 more classes (group orders up to 1920) reached without building the splitting field: large existence-certificate surfaces with the source field, 27-line orbit structure, and mod-`q` Frobenius certification.
+> 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; explicit smooth cubic surfaces over `Q` across **246 of the 350** conjugacy classes of `W(E6)` subgroups (group orders up to 1920): searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons. **Minimized** classes carry small lattice-reduced models; **resolvent** classes are the large-`|Gal(f)|` classes reached without a splitting field. Bulk data in [`seed_database.tsv`](seed_database.tsv).
 
 A [Magma](http://magma.maths.usyd.edu.au/) implementation of **Elsenhans–Jahnel
 Algorithm 5.1** ([arXiv:1209.5591](https://arxiv.org/abs/1209.5591), *On the
@@ -260,29 +258,34 @@ certified cubics (max|coef| ≤ 8).
 
 ### The seed database and its browser
 
-`seed_database.m` runs every polynomial in `WE6fields.txt` through
-`RealizeCubicSurfaces` and writes `database_seed.txt` (lines
-`label:source_coeffs:cubic`). The current seed has **902 cubic surfaces across 58
-of the 350 `W(E6)` classes** — every class of small intrinsic discriminant
-`Δ_Cl` (orders 2–12).
+The database is a single collection over **246 of the 350 `W(E6)` classes**, in two
+families that cover disjoint classes:
 
-**`seed_database.html`** is a self-contained, browsable view of the database:
-group classes (rendered names, `dTt`, order, `W(E6)` label), the source field of
-each surface, and the cubic equations rendered with KaTeX, with search and
-per-order filtering and a light/dark toggle. Each surface links its number field
-to the [LMFDB](https://www.lmfdb.org/NumberField/), and has copy-to-Magma buttons
-for the cubic (in `P^3`) and for the class as a subgroup of `S27`. Open the file
-in any browser (equations load KaTeX from a CDN), or serve the repository with
-GitHub Pages. Regenerate it after extending the seed with:
+- **minimized** — `database_seed.m` runs every polynomial in `WE6fields.txt` through
+  `RealizeCubicSurfaces` and writes `database_seed.txt` (`label:source_coeffs:cubic`):
+  **902 small, lattice-reduced cubics across 58 classes** of small intrinsic
+  discriminant `Δ_Cl` (orders 2–12).
+- **resolvent** — `seed_nosplit.m` realises the large-`|Gal(f)|` classes without a
+  splitting field and writes `database_seed_nosplit.txt`
+  (`label:source_coeffs:orbit_sizes:cubic`): **188 large existence-certificate
+  surfaces (orders 6–1920)**.
+
+**`seed_database.html`** and **`seed_database.tsv`** are the single browser and the
+single bulk table over both families. The browser renders group classes (names,
+order, orbit sizes, `W(E6)` label), the source field of each surface (LMFDB-linked),
+the small cubics with KaTeX, and the large ones as a monospace preview with
+copy-to-Magma; it has search, per-order and per-family filters, and a light/dark
+toggle. Open the file in any browser (KaTeX loads from a CDN) or serve with GitHub
+Pages. Regenerate after extending either seed with:
 
 ```
-magma -b class_info.m        # -> class_info.txt   (group names for the classes)
-python3 make_seed_html.py    # -> seed_database.html
+magma -b class_info_all.m    # -> class_info_all.txt  (order, name, orbit sizes)
+python3 make_seed_html.py    # -> seed_database.html + seed_database.tsv
 ```
 
-`make_seed_html.py` also reads `lmfdb_fields.csv` (the LMFDB label of each source
-number field, keyed by its Polredabs coefficient list); refresh it from the LMFDB
-`nf_fields` table if new fields are added.
+`make_seed_html.py` also reads `lmfdb_fields.csv` and `lmfdb_fields_nosplit.csv`
+(the LMFDB label of each source number field, keyed by its Polredabs coefficient
+list); refresh them from the LMFDB `nf_fields` table if new fields are added.
 
 ## Status and limitations
 
@@ -305,20 +308,19 @@ number field, keyed by its Polredabs coefficient list); refresh it from the LMFD
   (`LinesFrobeniusCycleTypesModQ`) — with **no degree-`|Gal|` field built**. The
   surfaces are large (the same intrinsic `Δ_Cl` height as the minimization barrier
   below), but these classes are now reachable at all.
-- **Batch-seeded 182 of the 191 unseeded, tractable `W(E6)` classes** (subgroup
-  orders 2–1296) with the no-splitting-field method (`database_pipeline.m` +
-  `seed_nosplit.m`). Together with the 58 field-descent seeds, **242 of the 350
-  classes now carry a certified surface.** `nosplit_realizations.txt` records one
-  line per seeded class — source polynomial (to regenerate the surface), 27-line
-  orbit sizes, mod-`q` Frobenius orders, and largest-coefficient size;
-  `nosplit_unrealized.txt` lists the nine the method cannot yet reach, with
-  reasons (a trivial-group degeneracy, five orbit structures with no separable
-  primitive element up to degree 5, two order-24 twists that degenerated to
-  generic surfaces, and one d=10 class whose primitive-element search does not
-  complete in practical time). The full surfaces (large and non-minimized) are in
-  `database_seed_nosplit.txt` and browsable in `seed_database_nosplit.html`
-  (search / order-filter / copy-to-Magma, LMFDB-linked); each is also regenerable
-  from its source polynomial with `CubicSurfaceNoSplittingField(G, f)`.
+- **Seeded 188 more classes with the no-splitting-field method** (subgroup orders
+  6–1920; `seed_nosplit.m`, re-certified by `seed_certify.m`). Together with the 58
+  field-descent seeds, **246 of the 350 classes now carry a surface** — a single
+  database: `seed_database.html` / `seed_database.tsv`, with the raw resolvent
+  surfaces in `database_seed_nosplit.txt` (each regenerable via
+  `CubicSurfaceNoSplittingField(G, f)`). Certification compares the full *set* of
+  mod-`q` Frobenius cycle types on the 27 lines to the target group's (via
+  `LinesGaloisCertificate`): containment rules out a generic (too-large) surface,
+  full coverage rules out a too-small one; every one of the 188 is contained (none
+  generic). `nosplit_unrealized.txt` lists the three the method cannot yet reach:
+  the trivial group (no field to descend) and two `[2,5,10,10]` orbit structures
+  with no separable primitive element (the size-2 orbit resists symmetric-monomial
+  traces to degree 7).
 - **Open: small explicit models for "large-Clebsch" twists.** The difficulty of
   producing a *small* explicit equation is governed by the twist's
   Clebsch-invariant height (set by the descent basis), not the field degree.
