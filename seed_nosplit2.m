@@ -34,6 +34,14 @@ for r in [ Split(x, ":") : x in Split(Read("WE6fields.txt")) ] do
     dt := <StringToInteger(r[1]), StringToInteger(r[2])>;
     if not IsDefined(polyOf, dt) then polyOf[dt] := r[3]; end if;
 end for;
+/* per-label overrides (gap_fields.txt): fields bootstrapped from the EJ
+   surfaces / LMFDB / compositum constructions for the classes WE6fields.txt
+   does not cover.  Any f with Gal(f) isomorphic to the class group works. */
+overrides := AssociativeArray();
+try for l in Split(Read("gap_fields.txt")) do
+    p := Split(l, ":");
+    if #p eq 2 and #p[1] ge 1 and p[1][1] ne "#" then overrides[p[1]] := p[2]; end if;
+end for; catch e ; end try;
 
 done := {};
 for fn in ["database_seed.txt", "database_seed_nosplit.txt", PROGFILE] do
@@ -45,8 +53,9 @@ end for;
 
 cand := [];
 for si in [1..#subs] do s := subs[si];
-    if s[1] in done or not IsDefined(polyOf, <s[3],s[4]>)
-       or Order(s[2]) gt 26000 or s[3] gt 27 then continue; end if;
+    if s[1] in done or s[3] eq 1 or s[3] gt 27 or Order(s[2]) gt 52000
+       or (not IsDefined(polyOf, <s[3],s[4]>) and not IsDefined(overrides, s[1]))
+       then continue; end if;
     Append(~cand, <Order(s[2]), si>);
 end for;
 Sort(~cand, func< a,b | a[1]-b[1] >);
@@ -63,15 +72,16 @@ end function;
 for si in myidx do
     s := subs[si]; label := s[1]; G := s[2]; dd := s[3]; tt := s[4];
     if label in done then continue; end if;
-    coeffs := eval polyOf[<dd,tt>];
+    polystr := IsDefined(overrides, label) select overrides[label] else polyOf[<dd,tt>];
+    coeffs := eval polystr;
     f := &+[ coeffs[k+1]*t^k : k in [0..#coeffs-1] ];
 
     ok := false; r := 0; prec := 1200;
     for attempt in [1..3] do
         try
             r := CubicSurfaceNoSplittingField(G, f : Universal := U, Resolvent27 := RD,
-                     TmpDir := NOLTMP, Prec := prec, MaxSurfaces := 8,
-                     InvariantsOnly := true, Print := false);
+                     TmpDir := NOLTMP, Prec := prec, MaxSurfaces := 4,
+                     SplitPrimeBound := 3000000, InvariantsOnly := true, Print := false);
             ok := true; break;
         catch e
             prec *:= 2;
@@ -104,7 +114,7 @@ for si in myidx do
 
     cert := LinesGaloisCertificate(best, G, RD`phi27 : Print := false);
     PrintFile(OUTFILE, Sprintf("%o:%o:%o:%o:%o:%o",
-        label, polyOf[<dd,tt>], Sprint(r`orbit_sizes), cert`verdict, bestdig, best));
+        label, polystr, Sprint(r`orbit_sizes), cert`verdict, bestdig, best));
     PrintFile(PROGFILE, label);
     printf "chunk %o: %o d=%o ord %o -> %o digits %o\n",
         CHUNK, label, dd, Order(G), bestdig, cert`verdict;

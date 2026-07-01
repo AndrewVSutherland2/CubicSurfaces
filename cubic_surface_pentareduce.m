@@ -38,7 +38,7 @@ PentaReduceRF := recformat<
    at worst weaken the reduction, not break correctness).                     */
 BoundedFactorInteger := function(n : TrialLimit := 10^6,
                                      ECMRounds := [<5*10^4, 40>, <25*10^4, 30>, <10^6, 15>],
-                                     MPQSDigitCap := 68)
+                                     MPQSDigitCap := 68, ECMDigitCap := 120)
     n := Abs(n);
     if n le 1 then return {Integers()|}, {Integers()|}; end if;
     fs, comps := TrialDivision(n, TrialLimit);
@@ -51,6 +51,7 @@ BoundedFactorInteger := function(n : TrialLimit := 10^6,
         if IsProbablePrime(c) then Include(~primes, c); continue; end if;
         ispow, root := IsPower(c);
         if ispow then Append(~todo, root); Append(~todo, c div root); continue; end if;
+        if #Sprint(c) gt ECMDigitCap then Include(~leftover, c); continue; end if;
         split := false;
         for round in ECMRounds do
             for curve in [1..round[2]] do
@@ -100,7 +101,8 @@ end function;
 PentahedralReduce := function(inv : TmpDir := ".", GPProg := "",
                                     TrialLimit := 10^6,
                                     ECMRounds := [<5*10^4, 40>, <25*10^4, 30>, <10^6, 15>],
-                                    MPQSDigitCap := 68, Polish := true,
+                                    MPQSDigitCap := 68, ECMDigitCap := 120,
+                                    HeightCap := 4000, Polish := true,
                                     PolishDigitCap := 400, Print := false)
     err := rec< PentaReduceRF | verified := false >;
     if inv[5] eq 0 then return false, err, "E = 0: outside the pentahedral locus"; end if;
@@ -114,12 +116,17 @@ PentahedralReduce := function(inv : TmpDir := ".", GPProg := "",
     m := LCM([ Denominator(x) : x in s ]);
     sc := [ Integers() | m^k * s[k] : k in [1..5] ];
     PC := [ -sc[5], sc[4], -sc[3], sc[2], -sc[1], 1 ];
+    hd := Max([ #Sprint(Abs(c)) : c in PC ]);
+    if hd gt HeightCap then
+        return false, err, Sprintf("moduli point too large (%o-digit quintic)", hd);
+    end if;
 
     /* known prime support: E, Delta_Cl, the scaling m */
     primes := {Integers()|}; leftover := {Integers()|};
     for t in [ Numerator(E), Denominator(E), Numerator(DCl), Denominator(DCl), m ] do
         p1, l1 := BoundedFactorInteger(t : TrialLimit := TrialLimit,
-            ECMRounds := ECMRounds, MPQSDigitCap := MPQSDigitCap);
+            ECMRounds := ECMRounds, MPQSDigitCap := MPQSDigitCap,
+            ECMDigitCap := ECMDigitCap);
         primes join:= p1; leftover join:= l1;
     end for;
     if Print then

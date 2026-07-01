@@ -102,7 +102,7 @@ def add(label, coeffs_s, cubic, kind):
     classes.setdefault(label, []).append({
         "kind": kind,
         "polytex": poly_to_tex(coeffs),
-        "cubictex": cubic_to_tex(cubic) if kind == "minimized" else "",
+        "cubictex": cubic_to_tex(cubic) if (kind == "minimized" or max_coeff_digits(cubic) <= 80) else "",
         "raw": cubic,
         "digits": max_coeff_digits(cubic),
         "coeffs_s": coeffs_s.strip(),
@@ -360,7 +360,7 @@ function makeCard(c){
           from.appendChild(document.createTextNode(' · ')); from.appendChild(a);
         }
         d.appendChild(from);
-        if(s.kind==='minimized'){
+        if(s.cubictex){
           const eqrow = document.createElement('div'); eqrow.className='eqrow';
           const eq = document.createElement('div'); eq.className='eq';
           tex(eq, s.cubictex+' \\,=\\, 0', true);

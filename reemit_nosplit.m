@@ -26,6 +26,9 @@ CHUNK := geti("CHUNK_ID", 0); NCH := geti("NUM_CHUNKS", 1);
 NOLTMP := gets("NOLTMP"); OUTFILE := gets("OUTFILE"); PROGFILE := gets("PROGFILE");
 if NOLTMP eq "" then NOLTMP := "."; end if;
 GPPROG := GetCurrentDirectory() cat "/pentareduce.gp";
+MAXSURF := geti("MAXSURF", 4);        // candidate moduli points per class
+NREDUCE := geti("NREDUCE", 3);        // how many of them to pentahedrally reduce
+SKIPLE  := geti("SKIPLE", 0);         // skip classes whose stored model already has <= this many digits
 
 U  := BuildUniversalCobleData(: Print := false);
 RD := BuildResolvent27Data(U : Print := false);
@@ -36,6 +39,10 @@ storedSrc := AssociativeArray(); storedOrb := AssociativeArray();
 for ln in Split(Read("database_seed_nosplit.txt")) do
     if #ln eq 0 or ln[1] eq "#" then continue; end if;
     p := Split(ln, ":");
+    if SKIPLE gt 0 then
+        dg := Max([ #x : x in Split(p[#p], "+-*^ wxyz") | x ne "" ]);
+        if dg le SKIPLE then continue; end if;
+    end if;
     storedSrc[p[1]] := p[2]; storedOrb[p[1]] := p[3];
 end for;
 
@@ -65,7 +72,7 @@ for label in mine do
     for attempt in [1..3] do
         try
             r := CubicSurfaceNoSplittingField(G, f : Universal := U, Resolvent27 := RD,
-                     TmpDir := NOLTMP, Prec := prec, MaxSurfaces := 8,
+                     TmpDir := NOLTMP, Prec := prec, MaxSurfaces := MAXSURF,
                      InvariantsOnly := true, Print := false);
             ok := true; break;
         catch e
@@ -83,7 +90,7 @@ for label in mine do
     scored := Sort([ <EScore(cands[i][3]), #Sprint(cands[i][1]), i> : i in [1..#cands] ]);
     best := Pxyzw!0; bestdig := 0; tried := 0; nleft := -1;
     for sc in scored do
-        if tried ge 3 then break; end if;
+        if tried ge NREDUCE then break; end if;
         tried +:= 1;
         cand := cands[sc[3]];
         rok, res, msg := PentahedralReduce(cand[3] : TmpDir := NOLTMP, GPProg := GPPROG);
