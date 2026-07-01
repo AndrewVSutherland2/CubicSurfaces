@@ -309,10 +309,11 @@ number field, keyed by its Polredabs coefficient list); refresh it from the LMFD
   classes now carry a certified surface.** `nosplit_realizations.txt` records one
   line per seeded class — source polynomial (to regenerate the surface), 27-line
   orbit sizes, mod-`q` Frobenius orders, and largest-coefficient size;
-  `nosplit_unrealized.txt` lists the handful the method cannot yet reach, with
+  `nosplit_unrealized.txt` lists the nine the method cannot yet reach, with
   reasons (a trivial-group degeneracy, five orbit structures with no separable
-  primitive element up to degree 5, and two order-24 twists that degenerated to
-  generic surfaces). The realized surfaces are large and non-minimized —
+  primitive element up to degree 5, two order-24 twists that degenerated to
+  generic surfaces, and one d=10 class whose primitive-element search does not
+  complete in practical time). The realized surfaces are large and non-minimized —
   regenerate any of them from its source polynomial with
   `CubicSurfaceNoSplittingField(G, f)`.
 - **Open: small explicit models for "large-Clebsch" twists.** The difficulty of

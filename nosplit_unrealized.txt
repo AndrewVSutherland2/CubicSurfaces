@@ -11,3 +11,4 @@
 51840.b.1080.s1.a1    | d=6  ord=48  | no separable primitive element (inseparable to degree 5)
 51840.b.2160.p1.a1    | d=8  ord=24  | disproven: mod-q Frobenius orders {4,5,9} cannot occur in an order-24 group (twist gave a generic surface)
 51840.b.2160.r1.a1    | d=8  ord=24  | disproven: mod-q Frobenius orders {3,4,5,6,9} cannot occur in an order-24 group (twist gave a generic surface)
+51840.b.216.b1.a1     | d=10 ord=240 | primitive-element search too slow to complete: each degree-<=5 trace over the order-240 stabilisers costs ~8s, so the 180-try low-precision search does not finish in practical time (a scaling limit of buildX, not a proven wall -- needs an optimised trace evaluation to attempt)
