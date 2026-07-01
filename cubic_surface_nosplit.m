@@ -233,6 +233,7 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
                                                    Prec := 900,
                                                    HeightBound := 1,
                                                    SampleCap := 1500,
+                                                   MaxMonDegree := 6,
                                                    MaxSurfaces := 10,
                                                    SplitPrimeBound := 200000,
                                                    MaxPrimTries := 60,
@@ -297,41 +298,58 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
         for g in Pelts do ell := l0^(act(g)); if not IsDefined(gell,ell) then gell[ell]:=g; end if; end for;
         Append(~stabOf, Hs); Append(~cosetRep, gell);
     end for;
-    MonsUpTo := function(D)
-        ms := [ [i] : i in [1..d] ];
-        if D ge 2 then ms cat:= [ [i,j] : i,j in [1..d] | i le j ]; end if;
-        if D ge 3 then ms cat:= [ [i,j,k] : i,j,k in [1..d] | i le j and j le k ]; end if;
-        if D ge 4 then ms cat:= [ [i,j,k,l] : i,j,k,l in [1..d] | i le j and j le k and k le l ]; end if;
-        if D ge 5 then ms cat:= [ [i,j,k,l,m] : i,j,k,l,m in [1..d] | i le j and j le k and k le l and l le m ]; end if;
+    MonsUpTo := function(D)                          // all non-decreasing index tuples of length 1..D
+        cur := [ [i] : i in [1..d] ]; ms := cur;
+        for len in [2..D] do
+            nxt := [];
+            for m in cur do for i in [m[#m]..d] do Append(~nxt, m cat [i]); end for; end for;
+            cur := nxt; ms cat:= cur;
+        end for;
         return ms;
     end function;
-    buildX := function(R, mons, co, thresh)
-        ap := func< g | &+[ co[t]*&*[ R[v^g] : v in mons[t] ] : t in [1..#mons] ] >;
+    /* Trace monomial vectors: T[ell][t] = sum_{h in Stab(l0)} prod_{v in mons[t]} R[v^(h g_ell)].
+       These do not depend on the coefficients co, and
+           x_ell = sum_{h in Stab} sum_t co[t] mon_t(h g_ell) = sum_t co[t] T[ell][t],
+       so once T is built the whole random-co search is just cheap linear combinations.
+       Precomputing T (instead of re-tracing every trial) is what makes the large-group,
+       high-degree cases (d=10, |G|=240 -- ~10^3 stabiliser-trace terms per line) tractable. */
+    orbIdx := [ 0 : i in [1..27] ];
+    for oi in [1..#orbs] do for ell in orbs[oi] do orbIdx[ell] := oi; end for; end for;
+    TraceMonVecs := function(R, mons)
         Ru := Universe(R);
-        xp := [ Ru!0 : i in [1..27] ]; oo := [ 0 : i in [1..27] ];
+        T := [ [ Ru!0 : t in [1..#mons] ] : ell in [1..27] ];
         for oi in [1..#orbs] do Hs := stabOf[oi]; gell := cosetRep[oi];
-            for ell in orbs[oi] do g := gell[ell]; xp[ell] := &+[ ap(h*g) : h in Hs ]; oo[ell] := oi; end for;
+            for ell in orbs[oi] do
+                acc := [ Ru!0 : t in [1..#mons] ];
+                for h in Hs do g := h*gell[ell];
+                    rr := [ R[i^g] : i in [1..#R] ];             // roots permuted by g, once
+                    for t in [1..#mons] do acc[t] +:= &*[ rr[v] : v in mons[t] ]; end for;
+                end for;
+                T[ell] := acc;
+            end for;
         end for;
-        sep := &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) lt thresh : i,jj in [1..#o]|i lt jj ] : o in orbs | #o gt 1 ];
-        return xp, oo, sep;
+        return T;
     end function;
+    combine := func< co, T | [ &+[ co[t]*T[ell][t] : t in [1..#co] ] : ell in [1..27] ] >;
+    isSep   := func< xp, thr | &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) lt thr : i,jj in [1..#o]|i lt jj ]
+                                     : o in orbs | #o gt 1 ] >;
     /* search a separating combination cheaply at low precision, escalating degree,
        then rebuild it at full precision */
     rtsLo := [ GaloisRoot(i, S : Prec := 80) : i in [1..d] ];
     RpLo  := FieldOfFractions(Universe(rtsLo)); rtsLo := [ RpLo ! x : x in rtsLo ];
-    xpad := []; orbOf := []; usemons := []; usco := []; gotco := false; usedeg := 0;
-    for D in [3..5] do
+    xpad := []; orbOf := orbIdx; usemons := []; usco := []; gotco := false; usedeg := 0;
+    for D in [3..MaxMonDegree] do
         mons := MonsUpTo(D);
+        Tlo  := TraceMonVecs(rtsLo, mons);
         for tries in [1..MaxPrimTries] do
             co := [ Random([1..6]) : t in [1..#mons] ];
-            _, _, sep := buildX(rtsLo, mons, co, 40);
-            if sep then usemons := mons; usco := co; usedeg := D; gotco := true; break; end if;
+            if isSep(combine(co, Tlo), 40) then usemons := mons; usco := co; usedeg := D; gotco := true; break; end if;
         end for;
         if gotco then break; end if;
     end for;
-    error if not gotco, "no separable primitive element (up to degree 5)";
+    error if not gotco, Sprintf("no separable primitive element (up to degree %o)", MaxMonDegree);
     if Print then printf "primitive element: degree-<=%o monomials\n", usedeg; end if;
-    xpad, orbOf, _ := buildX(rts, usemons, usco, Prec div 2);
+    xpad := combine(usco, TraceMonVecs(rts, usemons));       // rebuild at full precision
 
     /* polredbest -> condition the resolvent fields (x_ell <- beta(x_ell)) */
     Px := PolynomialRing(Q);
@@ -451,46 +469,94 @@ end function;
 /* its W(E6) class; for S5 additionally find an order-4 or order-6 element).   */
 /* ------------------------------------------------------------------------- */
 
-LinesFrobeniusCycleTypesModQ := function(gl : QStart := 11, QStop := 1500, MaxQ := 40,
-                                              Tries := 25, Print := true)
-    R4 := PolynomialRing(Q, 4);
-    glZ := R4 ! gl;
-    results := [];
-    for q in PrimesInInterval(QStart, QStop) do
-        Fq  := GF(q);
-        R4q := PolynomialRing(Fq, 4);
-        glq := R4q ! glZ;
-        P3  := ProjectiveSpace(Fq, 3); CR := CoordinateRing(P3);
-        if not IsEmpty(Scheme(P3, [ Derivative(CR!glq, i) : i in [1..4] ])) then continue; end if;
-        PT<T> := PolynomialRing(Fq);
-        ct := [];
-        for attempt in [1..Tries] do
-            repeat Mt := Matrix(Fq,4,4,[Random(Fq):i in [1..16]]); until Determinant(Mt) ne 0;
-            g := Evaluate(glq, [ &+[Mt[i,j]*R4q.j : j in [1..4]] : i in [1..4] ]);
-            A4 := PolynomialRing(Fq, 4); Pxy<XX,YY> := PolynomialRing(A4, 2);
-            Fb := Evaluate(g, [XX, YY, A4.1*XX + A4.2*YY, A4.3*XX + A4.4*YY]);
-            cfs := [ MonomialCoefficient(Fb, XX^k*YY^(3-k)) : k in [0..3] ];
-            Sch := Scheme(AffineSpace(A4), cfs);
-            if Dimension(Sch) eq 0 and Degree(Sch) eq 27 then
-                A5 := PolynomialRing(Fq, 5);
-                emb := hom< A4 -> A5 | [A5.1,A5.2,A5.3,A5.4] >;
-                lam := A5.1 + Random([2..q-1])*A5.2 + Random([2..q-1])*A5.3 + Random([2..q-1])*A5.4;
-                Jel := EliminationIdeal(ideal< A5 | [emb(F):F in cfs] cat [A5.5 - lam] >, 4);
-                gg := [ b : b in Basis(Jel) | b ne 0 ];
-                if #gg ge 1 then
-                    fa := Evaluate(gg[1], [0,0,0,0,T]);
-                    if Degree(fa) eq 27 and IsSquarefree(fa) then
-                        ct := Sort([ Degree(tt[1]) : tt in Factorization(fa) ]); break;
-                    end if;
+/* cycle type of Frobenius at q on the 27 lines of gl (= factor degrees of the
+   degree-27 line resolvent mod q), or [] if q is bad or the random slice failed. */
+FrobCycleTypeModQ := function(glZ, q, Tries)
+    Fq  := GF(q);
+    R4q := PolynomialRing(Fq, 4);
+    glq := R4q ! glZ;
+    P3  := ProjectiveSpace(Fq, 3); CR := CoordinateRing(P3);
+    if not IsEmpty(Scheme(P3, [ Derivative(CR!glq, i) : i in [1..4] ])) then return []; end if;
+    PT<T> := PolynomialRing(Fq);
+    for attempt in [1..Tries] do
+        repeat Mt := Matrix(Fq,4,4,[Random(Fq):i in [1..16]]); until Determinant(Mt) ne 0;
+        g := Evaluate(glq, [ &+[Mt[i,j]*R4q.j : j in [1..4]] : i in [1..4] ]);
+        A4 := PolynomialRing(Fq, 4); Pxy<XX,YY> := PolynomialRing(A4, 2);
+        Fb := Evaluate(g, [XX, YY, A4.1*XX + A4.2*YY, A4.3*XX + A4.4*YY]);
+        cfs := [ MonomialCoefficient(Fb, XX^k*YY^(3-k)) : k in [0..3] ];
+        Sch := Scheme(AffineSpace(A4), cfs);
+        if Dimension(Sch) eq 0 and Degree(Sch) eq 27 then
+            A5 := PolynomialRing(Fq, 5);
+            emb := hom< A4 -> A5 | [A5.1,A5.2,A5.3,A5.4] >;
+            lam := A5.1 + Random([2..q-1])*A5.2 + Random([2..q-1])*A5.3 + Random([2..q-1])*A5.4;
+            Jel := EliminationIdeal(ideal< A5 | [emb(F):F in cfs] cat [A5.5 - lam] >, 4);
+            gg := [ b : b in Basis(Jel) | b ne 0 ];
+            if #gg ge 1 then
+                fa := Evaluate(gg[1], [0,0,0,0,T]);
+                if Degree(fa) eq 27 and IsSquarefree(fa) then
+                    return Sort([ Degree(tt[1]) : tt in Factorization(fa) ]);
                 end if;
             end if;
-        end for;
+        end if;
+    end for;
+    return [];
+end function;
+
+LinesFrobeniusCycleTypesModQ := function(gl : QStart := 11, QStop := 1500, MaxQ := 40,
+                                              Tries := 25, Print := true)
+    glZ := PolynomialRing(Q, 4) ! gl;
+    results := [];
+    for q in PrimesInInterval(QStart, QStop) do
+        ct := FrobCycleTypeModQ(glZ, q, Tries);
         if #ct eq 0 then continue; end if;
         Append(~results, <q, ct>);
         if Print then printf "  q=%-5o : %o   (element order %o)\n", q, ct, LCM(ct); end if;
         if #results ge MaxQ then break; end if;
     end for;
     return results;
+end function;
+
+/* ------------------------------------------------------------------------- */
+/* Fuller certification.  Compare the SET of mod-q Frobenius cycle types on    */
+/* the 27 lines to the cycle types of the target group G (mapped into S27 by   */
+/* phi27 = Resolvent27`phi27).  Containment (no "alien" type) rules out an      */
+/* accidentally generic, too-large surface; seeing ALL of G's cycle types      */
+/* rules out a too-small one -- a proper subgroup H < G realises only H's cycle */
+/* types, a strict subset of G's, so it can never reach full coverage.  This is */
+/* not a proof of the action (distinct groups can share a cycle-type set on the */
+/* 27 lines), but it is far stronger than matching element orders alone.        */
+/* Verdicts: CERTIFIED (contained + full coverage), CONSISTENT (contained but   */
+/* some of G's cycle types not yet seen -- raise MaxQ/QStop), REJECTED (an      */
+/* alien cycle type appeared, so the 27-line group is not inside G).            */
+/* ------------------------------------------------------------------------- */
+NoSplitCertRF := recformat< verdict, subset_ok, coverage, n_target, n_seen,
+                            n_primes, extra_types, missing_types >;
+LinesGaloisCertificate := function(gl, G, phi27 : QStart := 11, QStop := 40000,
+                                   MinPrimes := 40, MaxPrimes := 220, Tries := 25, Print := true)
+    cyc := func< p | Sort(&cat[ [ c[1] : j in [1..c[2]] ] : c in CycleStructure(p) ]) >;
+    target := {}; for c in ConjugacyClasses(G) do Include(~target, cyc(phi27(c[3]))); end for;
+    glZ := PolynomialRing(Q, 4) ! gl;
+    seen := {}; alien := {}; np := 0;
+    for q in PrimesInInterval(QStart, QStop) do
+        ct := FrobCycleTypeModQ(glZ, q, Tries);
+        if #ct eq 0 then continue; end if;
+        np +:= 1;
+        if ct notin target then Include(~alien, ct); break; end if;   // an alien type is decisive
+        Include(~seen, ct);
+        if (seen eq target and np ge MinPrimes) or np ge MaxPrimes then break; end if;
+    end for;
+    miss := target diff seen; subset_ok := #alien eq 0;
+    verdict := (not subset_ok) select "REJECTED"
+               else (#miss eq 0 select "CERTIFIED" else "CONSISTENT");
+    if Print then
+        printf "certificate: %o  (%o/%o of G's cycle types over %o primes%o)\n",
+            verdict, #target - #miss, #target, np,
+            subset_ok select "" else Sprintf(", ALIEN type %o", Random(alien));
+    end if;
+    return rec< NoSplitCertRF | verdict := verdict, subset_ok := subset_ok,
+        coverage := (#target eq 0) select 1 else (#target - #miss) / #target,
+        n_target := #target, n_seen := #target - #miss, n_primes := np,
+        extra_types := alien, missing_types := miss >;
 end function;
 
 /*
