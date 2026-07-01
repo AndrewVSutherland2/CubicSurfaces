@@ -1,6 +1,6 @@
 # CubicSurfaces
 
-> 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; explicit smooth cubic surfaces over `Q` across **246 of the 350** conjugacy classes of `W(E6)` subgroups (group orders up to 1920): searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons. **Minimized** classes carry small lattice-reduced models; **resolvent** classes are the large-`|Gal(f)|` classes reached without a splitting field. Bulk data in [`seed_database.tsv`](seed_database.tsv).
+> 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; explicit smooth cubic surfaces over `Q` across **291 of the 350** conjugacy classes of `W(E6)` subgroups (group orders 1 up to 1920, source fields of degree up to 24): searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons. **Minimized** classes carry small lattice-reduced models; **resolvent** classes are the large-`|Gal(f)|` classes reached without a splitting field, now stored as **pentahedrally reduced** models (`cubic_surface_pentareduce.m`) with per-class cycle-type certificates in [`nosplit_verdicts.txt`](nosplit_verdicts.txt). Bulk data in [`seed_database.tsv`](seed_database.tsv).
 
 A [Magma](http://magma.maths.usyd.edu.au/) implementation of **Elsenhans–Jahnel
 Algorithm 5.1** ([arXiv:1209.5591](https://arxiv.org/abs/1209.5591), *On the
@@ -26,6 +26,9 @@ surface in `P^3`.
 | `cubic_surface_resolvent_twist.m` | The core implementation (all entry points below), including the **A6 cuspidal-cubic point producer**. |
 | `cubic_surface_nosplit.m`         | **No-splitting-field** variant: reaches the large-`\|Gal(f)\|` classes (`A5`, `S5`, …) the field descent cannot start, via the 27-line resolvent algebra at a totally-split prime + `polredbest` (needs PARI/GP). |
 | `database_pipeline.m`             | Generator for **many** surfaces per number field — `GenerateDatabase(f, …)` (see below). |
+| `cubic_surface_pentareduce.m` + `pentareduce.gp` | **Pentahedral (K5, λ) reduction**: small models from Clebsch invariants *without factoring model discriminants* — `polredbest` with the known prime support of `E = I40` and `Δ_Cl`, ideal-level cube-stripping of λ, weighted LLL of the trace-zero lattice, then `MinimizeCubicSurface` at the (now known) primes.  Turns the stored "unminimizable" S3 examples from 485–1062 digits into 5–10 digits. |
+| `reemit_nosplit.m` / `seed_nosplit2.m` | Chunked batch drivers: re-emit the no-split classes with reduced models / seed the degree-≤27, order-≤52000 classes (with `gap_fields.txt` per-label source-field overrides). |
+| `classify_ej.m` + `ej_classification.tsv` | Classification of all 350 Elsenhans–Jahnel database surfaces by `W(E6)` class via mod-`q` Frobenius cycle types + a global one-per-class assignment.  (This revealed that `ElsenhansJahnelDatabase.txt` contains **two** surfaces of class `51840.b.540.a1.a1` — entries 272 and 274, both with 27-line group of order 96 — and hence covers at most 349 classes.) |
 | `examples.m`                      | Builds and certifies the four cyclic examples `C4, C5, C9, C12`. |
 | `algorithm_5_1_explicit_A6_map.tex` | The note describing the explicit dominant `A^6 →` moduli map used to avoid the point search. |
 | `cubic_surface_discriminant_clebsch.tex` | The Clebsch–Salmon discriminant `Δ_Cl` (EJ Lemma 2.6), used to rank surfaces by intrinsic discriminant. |

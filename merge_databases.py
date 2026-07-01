@@ -34,6 +34,9 @@ def read_chunks(d):
                 continue
             label, src, orb, verdict, digits = p[0], p[1], p[2], p[3], p[4]
             cubic = ":".join(p[5:])
+            if verdict not in ("CERTIFIED", "CONSISTENT"):
+                print(f"DROPPED (verdict {verdict!r}): {label}")
+                continue
             rows[label] = dict(src=src, orb=orb, verdict=verdict,
                                digits=int(digits), cubic=cubic)
     return rows, keeps
