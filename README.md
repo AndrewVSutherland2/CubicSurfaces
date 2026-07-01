@@ -303,6 +303,18 @@ number field, keyed by its Polredabs coefficient list); refresh it from the LMFD
   (`LinesFrobeniusCycleTypesModQ`) — with **no degree-`|Gal|` field built**. The
   surfaces are large (the same intrinsic `Δ_Cl` height as the minimization barrier
   below), but these classes are now reachable at all.
+- **Batch-seeded 182 of the 191 unseeded, tractable `W(E6)` classes** (subgroup
+  orders 2–1296) with the no-splitting-field method (`database_pipeline.m` +
+  `seed_nosplit.m`). Together with the 58 field-descent seeds, **242 of the 350
+  classes now carry a certified surface.** `nosplit_realizations.txt` records one
+  line per seeded class — source polynomial (to regenerate the surface), 27-line
+  orbit sizes, mod-`q` Frobenius orders, and largest-coefficient size;
+  `nosplit_unrealized.txt` lists the handful the method cannot yet reach, with
+  reasons (a trivial-group degeneracy, five orbit structures with no separable
+  primitive element up to degree 5, and two order-24 twists that degenerated to
+  generic surfaces). The realized surfaces are large and non-minimized —
+  regenerate any of them from its source polynomial with
+  `CubicSurfaceNoSplittingField(G, f)`.
 - **Open: small explicit models for "large-Clebsch" twists.** The difficulty of
   producing a *small* explicit equation is governed by the twist's
   Clebsch-invariant height (set by the descent basis), not the field degree.
