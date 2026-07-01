@@ -1,6 +1,8 @@
 # CubicSurfaces
 
 > 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; 902 explicit smooth cubic surfaces over `Q` across 58 conjugacy classes of `W(E6)` subgroups: searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons.
+>
+> 🔎 **[Browse the no-splitting-field classes →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database_nosplit.html)** &nbsp;—&nbsp; 182 more classes (group orders up to 1920) reached without building the splitting field: large existence-certificate surfaces with the source field, 27-line orbit structure, and mod-`q` Frobenius certification.
 
 A [Magma](http://magma.maths.usyd.edu.au/) implementation of **Elsenhans–Jahnel
 Algorithm 5.1** ([arXiv:1209.5591](https://arxiv.org/abs/1209.5591), *On the
@@ -24,6 +26,7 @@ surface in `P^3`.
 | File | Description |
 |------|-------------|
 | `cubic_surface_resolvent_twist.m` | The core implementation (all entry points below), including the **A6 cuspidal-cubic point producer**. |
+| `cubic_surface_nosplit.m`         | **No-splitting-field** variant: reaches the large-`\|Gal(f)\|` classes (`A5`, `S5`, …) the field descent cannot start, via the 27-line resolvent algebra at a totally-split prime + `polredbest` (needs PARI/GP). |
 | `database_pipeline.m`             | Generator for **many** surfaces per number field — `GenerateDatabase(f, …)` (see below). |
 | `examples.m`                      | Builds and certifies the four cyclic examples `C4, C5, C9, C12`. |
 | `algorithm_5_1_explicit_A6_map.tex` | The note describing the explicit dominant `A^6 →` moduli map used to avoid the point search. |
@@ -290,6 +293,32 @@ number field, keyed by its Polredabs coefficient list); refresh it from the LMFD
   `W(E6)` classes), `C5, C9, C12, S3`.
 - **Field degree is not the blocker.** `C9` (degree-9 splitting field) reduces to
   `max|coef| = 4` in ~3 s.
+- **The large-`|Gal(f)|` classes are reachable without the splitting field
+  (`cubic_surface_nosplit.m`).** Classes like `A5` (`|Gal| = 60`) and `S5`
+  (`|Gal| = 120`) — where realizing the degree-`|Gal(f)|` field is intractable —
+  are handled by working at a totally-split prime `p` (all roots of `f` in `Z_p`),
+  forming the 27-line resolvent algebra `A_27 = ∏_j L^{H_j}` (factor degrees =
+  the `Gal`-orbit sizes on the 27 lines, each `≤ 27`) from the labelled `p`-adic
+  roots, conditioning each resolvent with PARI/GP `polredbest`, and evaluating the
+  `W(E6)`-invariant Clebsch quantities `p`-adically. `A5` and `S5` cubic surfaces
+  are produced and certified — via Frobenius cycle types on the 27 lines
+  (`LinesFrobeniusCycleTypesModQ`) — with **no degree-`|Gal|` field built**. The
+  surfaces are large (the same intrinsic `Δ_Cl` height as the minimization barrier
+  below), but these classes are now reachable at all.
+- **Batch-seeded 182 of the 191 unseeded, tractable `W(E6)` classes** (subgroup
+  orders 2–1296) with the no-splitting-field method (`database_pipeline.m` +
+  `seed_nosplit.m`). Together with the 58 field-descent seeds, **242 of the 350
+  classes now carry a certified surface.** `nosplit_realizations.txt` records one
+  line per seeded class — source polynomial (to regenerate the surface), 27-line
+  orbit sizes, mod-`q` Frobenius orders, and largest-coefficient size;
+  `nosplit_unrealized.txt` lists the nine the method cannot yet reach, with
+  reasons (a trivial-group degeneracy, five orbit structures with no separable
+  primitive element up to degree 5, two order-24 twists that degenerated to
+  generic surfaces, and one d=10 class whose primitive-element search does not
+  complete in practical time). The full surfaces (large and non-minimized) are in
+  `database_seed_nosplit.txt` and browsable in `seed_database_nosplit.html`
+  (search / order-filter / copy-to-Magma, LMFDB-linked); each is also regenerable
+  from its source polynomial with `CubicSurfaceNoSplittingField(G, f)`.
 - **Open: small explicit models for "large-Clebsch" twists.** The difficulty of
   producing a *small* explicit equation is governed by the twist's
   Clebsch-invariant height (set by the descent basis), not the field degree.

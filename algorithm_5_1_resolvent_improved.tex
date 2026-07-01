@@ -1,0 +1,1563 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools,amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black,
+  pdftitle={A resolvent-algebra version of Algorithm 5.1},
+  pdfauthor={OpenAI}
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  xleftmargin=0.5em,
+  xrightmargin=0.5em,
+  aboveskip=0.7em,
+  belowskip=0.7em
+}
+
+\setlist[enumerate]{itemsep=0.35em,topsep=0.45em}
+\setlist[itemize]{itemsep=0.25em,topsep=0.4em}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+
+\newcommand{\QQ}{\mathbf{Q}}
+\newcommand{\ZZ}{\mathbf{Z}}
+\newcommand{\PP}{\mathbf{P}}
+\newcommand{\Aff}{\mathbf{A}}
+\newcommand{\GG}{\mathbf{G}}
+\newcommand{\ol}[1]{\overline{#1}}
+\newcommand{\Gal}{\operatorname{Gal}}
+\newcommand{\Pic}{\operatorname{Pic}}
+\newcommand{\Spec}{\operatorname{Spec}}
+\newcommand{\Tr}{\operatorname{Tr}}
+\newcommand{\Nm}{\operatorname{Nm}}
+\newcommand{\Hom}{\operatorname{Hom}}
+\newcommand{\End}{\operatorname{End}}
+\newcommand{\Mat}{\operatorname{Mat}}
+\newcommand{\Span}{\operatorname{Span}}
+\newcommand{\im}{\operatorname{im}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\Fix}{\operatorname{Fix}}
+\newcommand{\Stab}{\operatorname{Stab}}
+\newcommand{\disc}{\operatorname{disc}}
+\newcommand{\PGL}{\operatorname{PGL}}
+\newcommand{\cM}{\mathcal{M}}
+\newcommand{\tcM}{\widetilde{\mathcal{M}}}
+\newcommand{\tM}{\widetilde{M}}
+\newcommand{\cA}{\mathcal{A}}
+\newcommand{\cO}{\mathcal{O}}
+\newcommand{\cP}{\mathcal{P}}
+\newcommand{\Gamhat}{\widehat{\Gamma}}
+\newcommand{\gamhat}{\widehat{\gamma}}
+\newcommand{\Deltav}{\Delta_{\mathrm{VdM}}}
+\newcommand{\deltaE}{\delta_{E_6}}
+\newcommand{\DeltaE}{\Delta_{E_6}}
+\newcommand{\W}{W(E_6)}
+\newcommand{\V}{V_6}
+\newcommand{\QOmega}{\QQ^{\Omega}}
+\newcommand{\red}[1]{\textcolor{red!75!black}{#1}}
+
+\newtheorem{definition}{Definition}[section]
+\newtheorem{proposition}[definition]{Proposition}
+\newtheorem{lemma}[definition]{Lemma}
+\newtheorem{theorem}[definition]{Theorem}
+\newtheorem{remark}[definition]{Remark}
+
+\newenvironment{summarybox}{%
+  \begin{center}\begin{minipage}{0.94\textwidth}\small
+  \hrule\vspace{0.55em}%
+}{%
+  \vspace{0.55em}\hrule\end{minipage}\end{center}%
+}
+
+\newenvironment{implementationbox}{%
+  \begin{center}\begin{minipage}{0.94\textwidth}\small
+  \hrule\vspace{0.55em}\textbf{Implementation point.}\ }{%
+  \vspace{0.55em}\hrule\end{minipage}\end{center}%
+}
+
+\title{A Resolvent-Algebra Version of Algorithm 5.1\\
+\large Avoiding a full explicit $\QQ$-basis for the splitting field}
+\author{Self-contained notes on the improved cubic-surface algorithm}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Algorithm 5.1 of Elsenhans--Jahnel constructs a smooth cubic surface over
+$\QQ$ with prescribed Galois action on its $27$ lines.  In the direct
+implementation, one represents the splitting field $L/\QQ$ as a
+$\QQ$-vector space, writes the Galois automorphisms as large rational
+matrices, and solves semilinear descent equations in dimensions $6$ and
+$10$.  This note describes a more economical version.  The ten-dimensional
+projective descent is unnecessary if one evaluates Clebsch invariants directly
+on the twisted six-dimensional source.  The remaining six-dimensional descent
+can be modeled using lower-degree resolvent algebras attached to suitable
+$G$-sets, especially the $27$-line $G$-set, instead of using the full splitting
+field.  The resulting algorithm takes as arithmetic input a separable
+polynomial $f(x)$ with labelled Galois group and a homomorphism into
+$W(E_6)$; it avoids constructing a $\QQ$-basis of the full splitting field
+unless one explicitly chooses the regular $G$-set.
+\end{abstract}
+
+\tableofcontents
+
+\section{Purpose and main conclusion}
+
+The goal is to construct a smooth cubic surface $X/\QQ$ whose induced Galois
+action on
+\[
+  \Pic(X_{\ol\QQ})
+\]
+--- equivalently, on the configuration of the $27$ geometric lines --- realizes a
+prescribed representation
+\[
+  \rho:G_{\QQ}\longrightarrow \W.
+\]
+Computationally, one usually replaces $G_{\QQ}$ by a finite quotient.  Thus the
+input is a finite Galois extension $L/\QQ$, a finite group
+$G=\Gal(L/\QQ)$, and a homomorphism
+\[
+  \rho:G\longrightarrow \W.
+\]
+The original descent-heavy implementation represents $L$ explicitly as a
+$\QQ$-vector space.  This is often the dominant cost.
+
+The improvement in this note has two parts.
+
+\begin{enumerate}[label=\textbf{Improvement \arabic*.}]
+\item Do not construct the descended ten-dimensional projective model
+$\tM_\rho\subset \PP^9_\QQ$ unless one specifically wants it.  For the purpose of
+producing a cubic equation, it is enough to evaluate the $W(E_6)$-invariant
+Clebsch quantities directly on the twisted six-dimensional source.
+\item Do not construct the full splitting field $L$ as a $\QQ$-vector space when
+building the twisted six-dimensional source.  Instead use a lower-degree
+resolvent algebra associated with a $G$-set $\Omega$ whose permutation module
+contains the six-dimensional $E_6$ reflection representation.
+\end{enumerate}
+
+The resulting mathematical input is not merely the abstract group $G$.  One needs
+both:
+\[
+  \boxed{\text{a polynomial }f(x)\in\QQ[x]\text{ whose splitting field is }L,}
+\]
+and
+\[
+  \boxed{\text{a labelled Galois group }G\leq S_{\deg f}\text{ together with }
+  \rho:G\to\W.}
+\]
+The polynomial encodes the arithmetic $G$-torsor.  The labelled permutation group
+records how this torsor acts on the roots.  The homomorphism $\rho$ transfers this
+arithmetic torsor to the $E_6$ marking data.
+
+\begin{summarybox}
+\textbf{Main conclusion.}
+The full splitting field $L$ is still present mathematically, but it need not be
+represented as a $\QQ$-vector space.  It can be replaced by smaller associated
+\'{e}tale algebras
+\[
+  \cA_\Omega=(L\otimes_\QQ \QQ^\Omega)^G
+\]
+attached to carefully chosen $G$-sets $\Omega$.  The universal safe choice is the
+$27$-line $G$-set obtained by restricting the standard $W(E_6)$-action on the
+$27$ lines along $\rho$.
+\end{summarybox}
+
+\section{The mathematical problem}
+
+\subsection{Input}
+
+The improved algorithm has the following input.
+
+\begin{enumerate}[label=\textbf{Input \arabic*.}]
+\item A separable polynomial
+\[
+  f(x)\in \QQ[x]
+\]
+with splitting field $L$.
+
+\item A labelled Galois group computation: a subgroup
+\[
+  G\leq S_d,\qquad d=\deg f,
+\]
+identified with $\Gal(L/\QQ)$ through its action on an ordered list of the roots
+\[
+  \alpha_1,\ldots,\alpha_d.
+\]
+Equivalently, for each $g\in G$, the action is
+\[
+  g(\alpha_i)=\alpha_{g(i)}.
+\]
+
+\item A homomorphism
+\[
+  \rho:G\longrightarrow \W.
+\]
+The embedding of the image into $\W$ is part of the input; the abstract isomorphism
+type of the image is not enough.
+
+\item Universal precomputed $E_6$ data:
+\begin{itemize}
+\item the six-dimensional rational representation
+$\V$ of $\W$ coming from Pinkham's cusp-parameter construction;
+\item the $40$ normalized Coble gamma labels and their convention sign mask;
+\item the formulas for the $W(E_6)$-invariant Clebsch quantities
+$A,B,C,D,E$;
+\item the $27$-line $W(E_6)$-set and the $W(E_6)$-equivariant map from its
+permutation module onto $\V$.
+\end{itemize}
+\end{enumerate}
+
+\subsection{Output}
+
+The desired output is a homogeneous cubic form
+\[
+  F(X_0,X_1,X_2,X_3)\in\QQ[X_0,X_1,X_2,X_3]
+\]
+such that the surface
+\[
+  X=\{F=0\}\subset\PP^3_\QQ
+\]
+is smooth and the induced Galois representation on the $27$ geometric lines of
+$X$ agrees with $\rho$, up to the marking convention used to identify the line
+configuration with the standard $E_6$ configuration.
+
+\subsection{Why an abstract group is insufficient}
+
+Two different polynomials can have labelled Galois groups abstractly isomorphic to
+the same subgroup of $\W$ but have non-isomorphic splitting fields.  They define
+different classes in
+\[
+  H^1(\QQ,G),
+\]
+and hence can define different twists of the marked moduli space.  The abstract
+group determines the possible symmetry type; the polynomial determines the actual
+arithmetic torsor.
+
+Thus the data
+\[
+  G\quad\text{and}\quad \rho:G\to\W
+\]
+are not enough.  One also needs the polynomial $f$, or an equivalent presentation
+of the same $G$-torsor over $\QQ$.
+
+\section{Universal geometry used by the algorithm}
+
+\subsection{The marked cubic-surface moduli space}
+
+Let $\tcM$ denote the moduli space of marked smooth cubic surfaces.  A marking is
+an ordered six-tuple of pairwise disjoint lines.  After blowing down these six
+lines, a marked cubic surface over an algebraically closed field is the same as an
+ordered configuration of six points
+\[
+  p_1,\ldots,p_6\in\PP^2
+\]
+in general position, modulo the diagonal action of $\PGL_3$.
+
+The Weyl group $\W$ acts on the marking.  The quotient by this action is the
+unmarked moduli space.  Algorithm 5.1 prescribes a Galois action on the marking,
+then forgets the marking after computing invariant moduli data.
+
+\subsection{The $27$ lines and the six-dimensional representation}
+
+Use the standard blow-up notation
+\[
+  \Pic(X_{\ol\QQ})=\ZZ H\oplus \ZZ E_1\oplus\cdots\oplus\ZZ E_6,
+\]
+with intersection form
+\[
+  H^2=1,
+  \qquad
+  E_i^2=-1,
+  \qquad
+  H\cdot E_i=0,
+  \qquad
+  E_i\cdot E_j=0\quad(i\neq j).
+\]
+The canonical class is
+\[
+  K=-3H+E_1+\cdots+E_6.
+\]
+The $27$ line classes are
+\[
+  E_i,\qquad
+  H-E_i-E_j\quad(1\leq i<j\leq6),
+\]
+and
+\[
+  2H-\sum_{j\neq i}E_j\quad(1\leq i\leq6).
+\]
+Let
+\[
+  \V=K^\perp\otimes_\ZZ\QQ.
+\]
+This is the rational six-dimensional reflection representation of $\W$.
+
+Let $\Omega_{27}$ be the set of the $27$ line classes.  There is a
+$W(E_6)$-equivariant surjection
+\begin{equation}
+  q_{27}:\QQ^{\Omega_{27}}\longrightarrow \V
+  \label{eq:q27}
+\end{equation}
+defined on basis vectors by
+\begin{equation}
+  e_\ell\longmapsto \ell+\frac{1}{3}K.
+  \label{eq:line-projection}
+\end{equation}
+Indeed,
+\[
+  \left(\ell+\frac{1}{3}K\right)\cdot K
+  =\ell\cdot K+\frac{1}{3}K^2
+  =-1+1=0.
+\]
+The images of the $27$ line classes span $K^\perp\otimes\QQ$.
+
+\begin{implementationbox}
+The map $q_{27}$ is the universal reason that the $27$-line resolvent is enough:
+after restricting the $27$-line action along $\rho:G\to W(E_6)$, the associated
+permutation module still surjects onto the desired six-dimensional source
+representation.
+\end{implementationbox}
+
+\subsection{Pinkham's cuspidal-cubic source}
+
+Let
+\[
+  C:yz^2=x^3\subset\PP^2
+\]
+be the cuspidal cubic.  Its smooth locus is parametrized by
+\[
+  p(t)=(t:t^3:1),\qquad t\in\Aff^1.
+\]
+For
+\[
+  t=(t_1,\ldots,t_6)\in\Aff^6,
+\]
+put
+\[
+  p_i(t)=p(t_i).
+\]
+When these six points are in general position, blowing them up gives a marked
+smooth cubic surface.  Thus one obtains a rational map
+\[
+  \Aff^6\dashrightarrow \tcM.
+\]
+The source $\Aff^6$ carries Pinkham's six-dimensional $W(E_6)$-action, and the map
+to $\tcM$ is $W(E_6)$-equivariant.
+
+The general-position locus is the complement of the $E_6$ root hyperplanes.  More
+explicitly, define
+\begin{equation}
+ \boxed{
+  \deltaE(t)=
+  \left(\prod_{1\leq i<j\leq6}(t_j-t_i)\right)
+  \left(\prod_{1\leq i<j<k\leq6}(t_i+t_j+t_k)\right)
+  (t_1+\cdots+t_6).
+ }
+ \label{eq:deltaE}
+\end{equation}
+Then the regular locus is
+\[
+  V^\circ=\{t\in\Aff^6:\deltaE(t)\neq0\}.
+\]
+The factors have the following meanings:
+\begin{itemize}
+\item $t_i=t_j$: two of the six points coincide;
+\item $t_i+t_j+t_k=0$: three of the six points are collinear;
+\item $t_1+\cdots+t_6=0$: all six points lie on a conic.
+\end{itemize}
+
+\begin{summarybox}
+\textbf{Important search-domain rule.}
+One should not exclude $t_i=0$.  The point $p(0)=(0:0:1)$ is smooth on the
+cuspidal cubic.  The only geometric exclusions in the source are the factors of
+$\deltaE$ in \eqref{eq:deltaE}, plus later Clebsch, pentahedral, and smoothness
+failure loci.
+\end{summarybox}
+
+For invariant boundary testing it is often preferable to use
+\begin{equation}
+  \DeltaE(t)=\deltaE(t)^2.
+  \label{eq:DeltaE}
+\end{equation}
+The polynomial $\DeltaE$ is $W(E_6)$-invariant, whereas $\deltaE$ is a relative
+invariant.
+
+\section{Coble coordinates and Clebsch invariants}
+
+\subsection{Normalized Coble coordinates on the cusp}
+
+For $I\subseteq\{1,\ldots,6\}$, write
+\[
+  s_I(t)=\sum_{i\in I}t_i,
+  \qquad
+  s_{[6]}(t)=t_1+\cdots+t_6,
+\]
+and
+\[
+  \Delta_I(t)=\prod_{\substack{i<j\\ i,j\in I}}(t_j-t_i),
+  \qquad
+  \Deltav(t)=\Delta_{\{1,\ldots,6\}}(t).
+\]
+On the cuspidal family, every raw Coble gamma coordinate has a common
+Vandermonde factor $\Deltav$.  Dividing by this factor gives normalized degree-nine
+coordinates.
+
+For a decomposition
+\[
+  I\sqcup I^c=\{1,\ldots,6\},\qquad |I|=|I^c|=3,
+\]
+the type-I normalized coordinate is
+\begin{equation}
+ \boxed{
+  \gamhat_{I\mid I^c}(t)
+  =\Delta_I(t)\Delta_{I^c}(t)s_I(t)s_{I^c}(t)s_{[6]}(t).
+ }
+ \label{eq:gammahatI}
+\end{equation}
+There are $10$ such coordinates.
+
+For a partition of $\{1,\ldots,6\}$ into three unordered pairs $A,B,C$, and a
+cyclic ordering $(A,B,C)$ of the three pairs, define
+\[
+  d_A=t_{a_2}-t_{a_1}\quad\text{for }A=\{a_1<a_2\},
+\]
+and similarly for $B$ and $C$.  The type-II normalized coordinate is
+\begin{equation}
+\boxed{
+\begin{aligned}
+ \gamhat_{A\to B\to C}(t)
+ &=d_A d_B d_C
+ \prod_{a\in A}s_{\{a\}\cup B}
+ \prod_{b\in B}s_{\{b\}\cup C}
+ \prod_{c\in C}s_{\{c\}\cup A}.
+\end{aligned}}
+\label{eq:gammahatII}
+\end{equation}
+There are $30$ such coordinates, because reversing the cyclic orientation gives
+the other coordinate associated with the same three-pair partition.
+
+Choose once and for all an ordering of the $40$ labels and a sign mask
+\[
+  \eta=(\eta_1,\ldots,\eta_{40})\in\{\pm1\}^{40}
+\]
+matching the implementation convention for Coble's determinants.  The stored
+normalized gamma vector is
+\[
+  \Gamhat(t)=\bigl(\eta_1\gamhat_1(t),\ldots,
+  \eta_{40}\gamhat_{40}(t)\bigr)^t.
+\]
+With the correct sign mask, this vector is exactly equivariant for a signed
+permutation representation of $W(E_6)$:
+\begin{equation}
+  \Gamhat(M_wt)=\widehat P_w\Gamhat(t),
+  \qquad w\in W(E_6),
+  \label{eq:gamma-equivariance}
+\end{equation}
+where $M_w$ denotes Pinkham's six-dimensional matrix and $\widehat P_w$ is a signed
+permutation matrix on the $40$ normalized gamma labels.
+
+\begin{implementationbox}
+The sign mask is not cosmetic.  A mismatch here usually appears later as a failure
+of rationality for supposedly descended quantities.  The even power sums below are
+independent of changing the signs of individual gamma coordinates, but equivariance
+checks and comparisons with stored Coble data are not.
+\end{implementationbox}
+
+\subsection{Clebsch invariants}
+
+Let
+\[
+  P_k(t)=\sum_{a=1}^{40}\gamhat_a(t)^k.
+\]
+The sum is over one representative from each signed pair of Coble coordinates.  In
+the formulas below only even powers appear, so the chosen signs of the forty
+coordinates do not affect the value.  One should not sum over all eighty signed
+coordinates, since that introduces an unwanted factor of two.
+
+The Clebsch quantities are
+\begin{align}
+ A={}&-6P_2,\nonumber\\
+ B={}&-24P_4+\frac{41}{16}P_2^2,\nonumber\\
+ C={}&\frac{576}{13}P_6-\frac{396}{13}P_4P_2
+       +\frac{29}{13}P_2^3,\nonumber\\
+ D={}&-\frac{62208}{1171}P_8
+       +\frac{54864}{1171}P_6P_2
+       +\frac{203616}{1171}P_4^2
+       -\frac{61287}{1171}P_4P_2^2
+       +\frac{13393}{4684}P_2^4,\nonumber\\
+ E={}&\frac{41472}{155}P_{10}
+       -\frac{4605984}{36301}P_8P_2
+       -\frac{106272}{403}P_6P_4
+       +\frac{19990440}{471913}P_6P_2^2 \nonumber\\
+   &\quad
+       +\frac{47719206}{471913}P_4^2P_2
+       -\frac{7468023}{471913}P_4P_2^3
+       +\frac{10108327}{18876520}P_2^5.
+       \label{eq:clebsch}
+\end{align}
+They are $W(E_6)$-invariant polynomial functions on the six-dimensional source.
+Consequently they descend to rational functions, indeed polynomial functions, on
+any twist of that source.
+
+If the gamma vector is multiplied by a scalar $\lambda$, then
+\[
+  (A,B,C,D,E)\mapsto
+  (\lambda^2A,\lambda^4B,\lambda^6C,\lambda^8D,\lambda^{10}E).
+\]
+Thus the moduli point lies in the weighted projective space
+\[
+  \PP(1,2,3,4,5).
+\]
+
+\subsection{From Clebsch invariants to a cubic equation}
+
+A general smooth cubic surface has a Sylvester pentahedral form
+\begin{equation}
+\begin{cases}
+ a_0W_0^3+a_1W_1^3+a_2W_2^3+a_3W_3^3+a_4W_4^3=0,\\
+ W_0+W_1+W_2+W_3+W_4=0.
+\end{cases}
+\label{eq:sylvester}
+\end{equation}
+Let
+\[
+  \sigma_i=e_i(a_0,\ldots,a_4),\qquad 1\leq i\leq5.
+\]
+Given a Clebsch vector $[A:B:C:D:E]$ with $E\neq0$, use
+\begin{equation}
+ \boxed{
+ [\sigma_1,\sigma_2,\sigma_3,\sigma_4,\sigma_5]
+ =\left[B,\ D,\ \frac{C^2-AE}{4},\ CE,\ E^2\right].
+ }
+ \label{eq:sigma-from-clebsch}
+\end{equation}
+Then form the monic quintic
+\begin{equation}
+  g(T)=T^5-\sigma_1T^4+\sigma_2T^3-\sigma_3T^2+\sigma_4T-\sigma_5.
+  \label{eq:penta-quintic}
+\end{equation}
+Let
+\[
+  \cA_5=\QQ[T]/(g),
+  \qquad
+  \theta=T\bmod g.
+\]
+Assume $g$ is separable.  Let
+\[
+  N=\ker\bigl(\Tr_{\cA_5/\QQ}:\cA_5\to\QQ\bigr).
+\]
+Choose a $\QQ$-basis
+\[
+  c_0,c_1,c_2,c_3
+\]
+of $N$ and set
+\[
+  \ell(X)=c_0X_0+c_1X_1+c_2X_2+c_3X_3
+  \in \cA_5[X_0,X_1,X_2,X_3].
+\]
+The output cubic is
+\begin{equation}
+ \boxed{
+  F(X_0,X_1,X_2,X_3)
+  =\Tr_{\cA_5/\QQ}\bigl(\theta\,\ell(X)^3\bigr).
+ }
+ \label{eq:trace-cubic}
+\end{equation}
+This is the trace-algebra form of Algorithm A.10.  It avoids computing the
+splitting field of the pentahedral quintic.
+
+\section{What the original descent computes}
+
+Let $L/\QQ$ be the splitting field of $f$ and let
+$G=\Gal(L/\QQ)$.  The six-dimensional twisted source is
+\begin{equation}
+  V_\rho=(L\otimes_\QQ \V)^G,
+  \label{eq:twisted-source}
+\end{equation}
+where $G$ acts semilinearly by
+\[
+  g(a\otimes v)=g(a)\otimes \rho(g)v.
+\]
+In coordinates, a point of $V_\rho$ is a vector $t\in L^6$ satisfying equations
+of the form
+\begin{equation}
+  M_{\rho(g)}\,g(t)=t,
+  \qquad g\in G,
+  \label{eq:six-fixed-equation}
+\end{equation}
+up to the chosen row/column convention.  The original implementation constructs a
+basis matrix
+\[
+  D_\rho\in\operatorname{GL}_6(L)
+\]
+whose columns form a $\QQ$-basis of this fixed space.
+
+Similarly, the ten-dimensional Coble span has a $G$-twist.  The original
+implementation constructs a basis matrix
+\[
+  B_\rho\in\operatorname{GL}_{10}(L)
+\]
+for the ten-dimensional semilinear fixed space, descends the thirty Coble cubics
+to $\QQ$, searches for a rational point in the descended projective variety, and
+then maps the point back to Coble coordinates.
+
+To solve \eqref{eq:six-fixed-equation} and its ten-dimensional analogue by plain
+rational linear algebra, one often chooses a $\QQ$-basis
+\[
+  \omega_1,\ldots,\omega_n
+\]
+of $L$ and writes every field automorphism $g\in G$ as a matrix in
+$\operatorname{GL}_n(\QQ)$.  This is the step we want to avoid.  When
+$|G|=[L:\QQ]$ is large, the matrices are large, the field arithmetic is expensive,
+and the descent becomes the bottleneck.
+
+\begin{summarybox}
+The full splitting field is one model of the torsor, not the only model.  The
+algorithm needs the twist
+$V_\rho$, not a particular $\QQ$-basis of $L$.  Resolvent algebras provide smaller
+models of the same torsor whenever the desired representation is visible inside a
+low-degree permutation representation.
+\end{summarybox}
+
+\section{First simplification: eliminate the ten-dimensional descent}
+
+The ten-dimensional matrix $B_\rho$ is useful if one wants explicit descended
+coordinates on the projective Coble model
+\[
+  \tM_\rho\subset\PP^9_\QQ.
+\]
+It is not needed to produce a cubic equation.
+
+Indeed, the trace cubic \eqref{eq:trace-cubic} depends only on the unmarked
+Clebsch vector
+\[
+  [A:B:C:D:E]\in \PP(1,2,3,4,5)(\QQ).
+\]
+The functions $A,B,C,D,E$ in \eqref{eq:clebsch} are $W(E_6)$-invariant functions
+on the Pinkham source $\V$.  Therefore they descend directly to functions
+\[
+  A_\rho,B_\rho,C_\rho,D_\rho,E_\rho
+\]
+on the twisted source $V_\rho$.
+
+Thus the production algorithm can follow the shorter route
+\[
+  u\in V_\rho(\QQ)
+  \longmapsto
+  \bigl(A_\rho(u),B_\rho(u),C_\rho(u),D_\rho(u),E_\rho(u)\bigr)
+  \longmapsto
+  \text{trace cubic over }\QQ.
+\]
+No rational point search in $\PP^9$, no descended Coble cubics, and no
+$B_\rho$ are required.
+
+\begin{proposition}[Ten-dimensional descent is unnecessary for equation production]
+Assume one can enumerate rational points of the twisted source $V_\rho$ and
+evaluate the descended Clebsch functions $A_\rho,B_\rho,C_\rho,D_\rho,E_\rho$ on
+those points.  Then one can run the cubic-surface production part of Algorithm 5.1
+without constructing the ten-dimensional matrix $B_\rho$ or the descended
+projective model $\tM_\rho\subset\PP^9_\QQ$.
+\end{proposition}
+
+\begin{proof}
+Over $L$, a point of $V_\rho$ becomes an ordinary cusp-parameter vector
+$t\in\V$.  The normalized Coble map gives a marked cubic surface, and the power-sum
+formulas \eqref{eq:clebsch} give its unmarked Clebsch invariants.  Since these
+formulas are $W(E_6)$-invariant, the resulting weighted Clebsch point is fixed by
+Galois and is defined over $\QQ$.  Formula \eqref{eq:sigma-from-clebsch} and the
+trace construction \eqref{eq:trace-cubic} then produce a cubic equation over
+$\QQ$.  The intermediate descended Coble coordinates are only one possible way of
+obtaining the same Clebsch point.
+\end{proof}
+
+\section{Resolvent algebras attached to $G$-sets}
+
+\subsection{The associated \'etale algebra}
+
+Let $\Omega$ be a finite left $G$-set.  Write $\QQ^\Omega$ for the permutation
+module with basis $\{e_\omega:\omega\in\Omega\}$.  Define
+\begin{equation}
+  \cA_\Omega=(L\otimes_\QQ \QQ^\Omega)^G,
+  \label{eq:AOmega}
+\end{equation}
+where $G$ acts semilinearly on $L$ and by its given permutation action on
+$\QQ^\Omega$.
+
+Then $\cA_\Omega$ is an \'etale $\QQ$-algebra of degree $|\Omega|$.  After base
+change to $L$, it splits canonically as
+\begin{equation}
+  L\otimes_\QQ \cA_\Omega\cong L^\Omega.
+  \label{eq:AOmega-split}
+\end{equation}
+
+If $\Omega$ is transitive and $\Omega\cong G/H$, then
+\begin{equation}
+  \cA_\Omega\cong L^H.
+  \label{eq:transitive-resolvent-field}
+\end{equation}
+For a general $G$-set decomposed into orbits
+\[
+  \Omega=\Omega_1\sqcup\cdots\sqcup\Omega_r,
+  \qquad
+  \Omega_j\cong G/H_j,
+\]
+one has
+\begin{equation}
+  \cA_\Omega\cong \prod_{j=1}^r L^{H_j}.
+  \label{eq:orbit-product}
+\end{equation}
+
+\subsection{Constructing $\cA_\Omega$ from $f$}
+
+Suppose first that $\Omega\cong G/H$ is transitive.  Choose an expression
+\[
+  \theta_H=\Theta(\alpha_1,\ldots,\alpha_d)\in L
+\]
+which is fixed by $H$ and whose stabilizer in $G$ is exactly $H$.  Then the
+resolvent polynomial
+\begin{equation}
+  h_H(T)=\prod_{gH\in G/H}\left(T-g(\theta_H)\right)
+  \label{eq:resolvent-polynomial}
+\end{equation}
+has coefficients in $\QQ$ and degree $[G:H]=|\Omega|$.  For a generic enough
+choice of $\Theta$, it is separable and
+\[
+  \QQ[T]/(h_H)\cong L^H\cong\cA_\Omega.
+\]
+
+For a nontransitive $G$-set, construct one such resolvent for each orbit and take
+the product algebra.  In practice, one chooses $\Theta$ as a suitably generic
+linear or low-degree expression in the roots of $f$ and verifies that the computed
+resolvent has the expected degree and discriminant nonzero.
+
+\begin{implementationbox}
+A list of separate orbit resolvent polynomials gives the underlying product
+algebra $\prod_j L^{H_j}$, but some algorithms also need the descended maps induced
+by $G$-equivariant linear maps between permutation modules.  Those maps encode the
+relative labelling of the different orbits.  Thus the true computational object is
+not only the product algebra $\cA_\Omega$, but $\cA_\Omega$ together with the
+descended endomorphisms and polynomial functions required below.
+\end{implementationbox}
+
+\subsection{Why this avoids the full splitting field}
+
+The full splitting field corresponds to the regular $G$-set $G$ itself:
+\[
+  (L\otimes_\QQ \QQ^G)^G\cong L.
+\]
+Using the regular $G$-set therefore gives degree $|G|$ arithmetic, which is exactly
+what we are trying to avoid.
+
+A smaller $G$-set $\Omega$ gives degree $|\Omega|$ arithmetic.  The $27$-line
+$G$-set always has total degree $27$, often split into smaller orbit factors.  If
+$|G|$ is large, this can be dramatically cheaper than computing in $L$.
+
+\section{Constructing the twisted six-dimensional source from a resolvent}
+
+\subsection{General representation-theoretic construction}
+
+Let $V$ be the six-dimensional representation $\V$ of $G$ obtained by restricting
+Pinkham's $W(E_6)$ representation along
+\[
+  \rho:G\to\W.
+\]
+Choose a finite $G$-set $\Omega$ and a $G$-equivariant surjection
+\begin{equation}
+  q:\QQ^\Omega\twoheadrightarrow V.
+  \label{eq:qOmega}
+\end{equation}
+Because $\QQ[G]$ is semisimple, $q$ admits a $G$-equivariant section
+\begin{equation}
+  s:V\hookrightarrow \QQ^\Omega.
+  \label{eq:section}
+\end{equation}
+Set
+\begin{equation}
+  e=sq\in\End_G(\QQ^\Omega).
+  \label{eq:idempotent}
+\end{equation}
+Then $e$ is a $G$-equivariant idempotent and
+\[
+  \im(e)\cong V.
+\]
+
+Twisting by the $G$-torsor defined by $f$ gives a $\QQ$-linear idempotent
+\begin{equation}
+  e_\rho:\cA_\Omega\longrightarrow\cA_\Omega.
+  \label{eq:descended-idempotent}
+\end{equation}
+Its image is the desired six-dimensional twisted source.
+
+\begin{proposition}[Resolvent model of the twisted source]
+With notation as above, there is a canonical isomorphism
+\begin{equation}
+  \im(e_\rho)\cong (L\otimes_\QQ V)^G=V_\rho.
+  \label{eq:source-as-image}
+\end{equation}
+In particular, $\im(e_\rho)$ is a six-dimensional $\QQ$-vector space.
+\end{proposition}
+
+\begin{proof}
+The exact sequence
+\[
+  0\longrightarrow\ker(q)\longrightarrow \QQ^\Omega
+  \xrightarrow{q}V\longrightarrow0
+\]
+splits $G$-equivariantly by $s$.  Tensoring with $L$ and taking semilinear
+$G$-invariants gives
+\[
+  (L\otimes\QQ^\Omega)^G
+  \cong
+  (L\otimes\ker(q))^G\oplus (L\otimes V)^G.
+\]
+Under the identification
+\[
+  (L\otimes\QQ^\Omega)^G=\cA_\Omega,
+\]
+the projection onto the second summand is precisely the descended idempotent
+$e_\rho$.  Therefore its image is $V_\rho$.
+\end{proof}
+
+\subsection{How to compute the idempotent}
+
+Suppose the matrices for the action of $G$ on $\QQ^\Omega$ are $P_g$, and the
+matrices for the action on $V$ are $M_g$.  With column vectors, equivariance of
+$q$ means
+\begin{equation}
+  M_g q=qP_g.
+  \label{eq:q-equivariance}
+\end{equation}
+Choose any rational section $s_0$ of $q$, so that $qs_0=I_V$.  Then
+\begin{equation}
+  s=\frac{1}{|G|}\sum_{g\in G}P_g^{-1}s_0M_g
+  \label{eq:averaged-section}
+\end{equation}
+is a $G$-equivariant section.  Indeed,
+\[
+  qs=I_V,
+  \qquad
+  P_hs=sM_h\quad(h\in G).
+\]
+Then
+\[
+  e=sq
+\]
+is the desired rational idempotent on $\QQ^\Omega$.
+
+The descended map $e_\rho$ on $\cA_\Omega$ is the unique $\QQ$-linear map whose
+base change to $L$ is the coordinate-wise map induced by $e$ on $L^\Omega$.
+Implementation methods include:
+\begin{enumerate}
+\item constructing the corresponding resolvent correspondences between the orbit
+factors $L^{H_i}$ and $L^{H_j}$;
+\item computing the map modulo enough good split primes, where
+$\cA_\Omega\otimes\mathbf F_p\cong \mathbf F_p^\Omega$, and reconstructing the
+rational matrix;
+\item in a hybrid test implementation, using the full splitting field only to
+calibrate $e_\rho$ once, then replacing it by the lower-degree resolvent model.
+\end{enumerate}
+The first two methods avoid constructing a $\QQ$-basis of $L$.
+
+\section{Choosing the $G$-set $\Omega$}
+
+\subsection{The root set of $f$}
+
+The cheapest possible choice is the root set of $f$:
+\[
+  \Omega_f=\{1,\ldots,d\},
+\]
+with its labelled $G$-action.  Then
+\[
+  \cA_{\Omega_f}=\QQ[x]/(f)
+\]
+if $f$ is irreducible; more generally it is the product of the root-algebra factors
+corresponding to the $G$-orbits on the roots.
+
+However, this works only if the permutation module $\QQ^{\Omega_f}$ contains the
+six-dimensional source representation as a quotient.  A preliminary character test
+is
+\begin{equation}
+  m=\left\langle \chi_V,\chi_{\Omega_f}\right\rangle_G
+  =\frac{1}{|G|}\sum_{g\in G}\chi_V(g)\cdot\#\Fix_{\Omega_f}(g).
+  \label{eq:character-test}
+\end{equation}
+If $m=0$, then $\QQ^{\Omega_f}$ cannot contain $V$.
+
+If $m>0$, this is still only a preliminary test, because $V$ may be reducible after
+restriction to $G$.  The definitive test is to solve the linear equations
+\begin{equation}
+  M_g C=CP_g,
+  \qquad g\in G,
+  \label{eq:intertwiner-equations}
+\end{equation}
+for matrices
+\[
+  C\in\Mat_{6\times d}(\QQ),
+\]
+and check whether some solution has rank $6$.  Such a solution is precisely a
+$G$-equivariant surjection
+\[
+  \QQ^{\Omega_f}\twoheadrightarrow V.
+\]
+
+\subsection{The $27$-line set}
+
+The universal safe choice is
+\[
+  \Omega=\Omega_{27},
+\]
+the $27$-line set, with $G$-action through $\rho$.  The surjection is the map
+$q_{27}$ in \eqref{eq:q27}.  Therefore the rank test is automatic.
+
+The associated algebra is
+\[
+  \cA_{27}=(L\otimes\QQ^{\Omega_{27}})^G.
+\]
+It has total degree $27$.  If the image of $G$ has orbits
+\[
+  \Omega_{27}=\Omega_1\sqcup\cdots\sqcup\Omega_r,
+\]
+then
+\[
+  \cA_{27}\cong\prod_{j=1}^r L^{H_j},
+  \qquad H_j=\Stab_G(\omega_j).
+\]
+Even when the product has several factors, the descended idempotent $e_\rho$ is
+still defined on the product algebra and has six-dimensional image.
+
+\begin{summarybox}
+\textbf{Recommended choice.}
+Try the root algebra $\QQ[x]/(f)$ first.  If it contains the six-dimensional source
+representation, it is likely the fastest model.  If it does not, use the $27$-line
+resolvent algebra.  This gives a uniform degree-$27$ substitute for the full
+splitting field.
+\end{summarybox}
+
+\subsection{A warning about multiple orbits}
+
+When $\Omega$ has several $G$-orbits, the underlying algebra
+\[
+  \prod_j L^{H_j}
+\]
+by itself is not always enough for implementation.  A $G$-equivariant map
+\[
+  \QQ^\Omega\to V
+\]
+may mix information from different orbits.  To descend such a map, one needs the
+corresponding rational linear maps between the orbit resolvent factors, or an
+equivalent method that preserves their common origin from the same $G$-torsor.
+
+Using a single transitive $G$-set whose permutation representation surjects onto
+$V$ is technically simpler.  But the $27$-line set may decompose after restriction
+to a subgroup $G\subset W(E_6)$, and the product-plus-correspondences model is then
+the correct object.
+
+\section{Evaluating invariant functions without $L$}
+
+Let
+\[
+  F\in \QQ[V]^G
+\]
+be a $G$-invariant polynomial function on the six-dimensional representation.  In
+applications, $F$ will be one of
+\[
+  \DeltaE,
+  \qquad
+  A,
+  B,
+  C,
+  D,
+  E.
+\]
+Choose a $G$-equivariant surjection
+\[
+  q:\QQ^\Omega\twoheadrightarrow V.
+\]
+Then
+\[
+  F\circ q\in\QQ[\QQ^\Omega]^G.
+\]
+Twisting by the torsor defined by $f$ gives an ordinary polynomial function
+\begin{equation}
+  F_{\rho,\Omega}:\cA_\Omega\longrightarrow\QQ.
+  \label{eq:descended-invariant}
+\end{equation}
+Restricting this function to
+\[
+  \im(e_\rho)\cong V_\rho
+\]
+gives the descended function on the twisted source.
+
+Equivalently, if $a\in\im(e_\rho)$ and one base changes to $L$, then $a$ becomes a
+vector in $L^\Omega$.  Applying $q$ gives an element of $L\otimes V$, and evaluating
+$F$ gives an element of $L$.  Because $F$ is $G$-invariant and $a$ is descended,
+that element is fixed by $G$, hence lies in $\QQ$.  This rational number is
+$F_{\rho,\Omega}(a)$.
+
+\begin{proposition}[Invariant evaluation]
+The values
+\[
+  \Delta_{E_6,\rho}(a),\quad A_\rho(a),\quad B_\rho(a),\quad C_\rho(a),\quad
+  D_\rho(a),\quad E_\rho(a)
+\]
+for $a\in V_\rho(\QQ)$ can be computed from the resolvent model
+$\cA_\Omega$ and the descended idempotent $e_\rho$, without computing a
+$\QQ$-basis of the full splitting field $L$.
+\end{proposition}
+
+\begin{proof}
+The construction above defines each value as the evaluation of a descended
+polynomial function on a finite-dimensional $\QQ$-vector space.  The data needed to
+write this polynomial are the resolvent algebra $\cA_\Omega$ and the descended
+linear maps attached to $q$ and $e$.  The full splitting field appears only after
+base change, where it is used to prove that the construction agrees with the
+ordinary untwisted invariant $F$.
+\end{proof}
+
+\subsection{Practical exact evaluation methods}
+
+There are several implementation strategies.
+
+\begin{enumerate}[label=\textbf{Method \arabic*.}]
+\item \textbf{Symbolic descent.}  Fix a $\QQ$-basis of $\cA_\Omega$, write a
+general element of $\im(e_\rho)$ in six coordinates, and descend the polynomial
+$F\circ q$ to a polynomial in those six coordinates.  This is a one-time
+instance-specific computation.
+
+\item \textbf{Modular split-prime evaluation.}  For good primes $p$ at which the
+relevant resolvent algebras split and all denominators are invertible, identify
+\[
+  \cA_\Omega\otimes\mathbf F_p\cong \mathbf F_p^\Omega.
+\]
+Evaluate $e$, $q$, and the invariant $F$ over $\mathbf F_p$.  Because the result is
+invariant under the residual labelling ambiguity, it is a well-defined value modulo
+$p$.  Repeat for enough primes and reconstruct the rational value by CRT and
+rational reconstruction.  If $\Omega$ has several orbits, the labellings of the
+factors must be correlated through the same torsor, or the descended
+correspondences must be used.
+
+\item \textbf{Hybrid calibration.}  During development, compute the full splitting
+field for small examples, verify the resolvent evaluation against the direct
+$L$-evaluation, and then remove the full splitting-field step in production.
+\end{enumerate}
+
+The crucial point is that the individual gamma coordinates are not the intended
+output of the no-$L$ implementation.  The intended output of the source evaluation
+is the invariant vector
+\[
+  [A:B:C:D:E]\in\PP(1,2,3,4,5)(\QQ).
+\]
+
+\section{The improved algorithm}
+\label{sec:improved-algorithm}
+
+\subsection{Universal precomputation}
+
+Compute once and store the following data.
+
+\begin{enumerate}[label=\textbf{U\arabic*.}]
+\item A concrete rational model of the six-dimensional representation $\V$ of
+$\W$, with matrices $M_w$ or a word-evaluation routine for the chosen generators of
+$\W$.
+
+\item The $27$-line $W(E_6)$-set and the surjection
+\[
+  q_{27}:\QQ^{\Omega_{27}}\twoheadrightarrow \V,
+  \qquad
+  e_\ell\mapsto \ell+K/3.
+\]
+
+\item The normalized gamma formulas \eqref{eq:gammahatI} and
+\eqref{eq:gammahatII}, the ordering of the forty labels, and the convention sign
+mask.
+
+\item The invariant formulas
+\[
+  \DeltaE=\deltaE^2,
+  \qquad
+  A,B,C,D,E.
+\]
+In a direct invariant implementation, one may store these as polynomial functions
+on $\V$ rather than as gamma-coordinate routines.
+
+\item The pentahedral reconstruction formulas
+\eqref{eq:sigma-from-clebsch}, \eqref{eq:penta-quintic}, and
+\eqref{eq:trace-cubic}.
+\end{enumerate}
+
+\subsection{Instance-specific computation}
+
+Given $f(x)$, a labelled Galois group $G\leq S_d$, and
+$\rho:G\to\W$, proceed as follows.
+
+\begin{enumerate}[label=\textbf{Step \arabic*.}]
+\item \textbf{Restrict the source representation.}
+Evaluate $\rho(g)$ in the six-dimensional representation $\V$ for generators of
+$G$.  This gives matrices $M_g$ for the $G$-action on $V$.
+
+\item \textbf{Choose a low-degree permutation model.}
+First test the root set $\Omega_f$ using the intertwiner equations
+\eqref{eq:intertwiner-equations}.  If there is a rank-six equivariant map
+\[
+  \QQ^{\Omega_f}\twoheadrightarrow V,
+\]
+use $\Omega=\Omega_f$.  Otherwise use $\Omega=\Omega_{27}$ with action through
+$\rho$ and $q=q_{27}$.
+
+\item \textbf{Construct the resolvent algebra.}
+Construct
+\[
+  \cA_\Omega=(L\otimes\QQ^\Omega)^G
+\]
+from $f$ using resolvent polynomials for the orbits of $\Omega$.  Do not construct
+a $\QQ$-basis of $L$.
+
+\item \textbf{Construct the descended source.}
+Choose a $G$-equivariant surjection
+\[
+  q:\QQ^\Omega\twoheadrightarrow V
+\]
+and a $G$-equivariant section $s$.  Form the idempotent
+\[
+  e=sq.
+\]
+Descend it to
+\[
+  e_\rho:\cA_\Omega\to\cA_\Omega.
+\]
+Compute a $\QQ$-basis
+\[
+  b_1,\ldots,b_6
+\]
+for
+\[
+  \im(e_\rho)\cong V_\rho.
+\]
+Optionally replace this basis by an LLL-reduced basis for a chosen integral lattice
+in $\im(e_\rho)$.
+
+\item \textbf{Enumerate source points.}
+Enumerate primitive vectors
+\[
+  u=(u_1,\ldots,u_6)\in\ZZ^6
+\]
+by increasing height and set
+\[
+  a(u)=u_1b_1+\cdots+u_6b_6\in \im(e_\rho).
+\]
+Primitive enumeration is natural because the Coble and Clebsch constructions are
+homogeneous, so scalar multiples usually give the same moduli point.
+
+\item \textbf{Boundary test.}
+Evaluate
+\[
+  \Delta_{E_6,\rho}(a(u)).
+\]
+If this is zero, reject $u$ and continue.  This is the invariant version of the
+condition that no factor in \eqref{eq:deltaE} vanish after base change to $L$.
+
+\item \textbf{Evaluate Clebsch invariants.}
+Evaluate
+\[
+  A=A_\rho(a(u)),\quad
+  B=B_\rho(a(u)),\quad
+  C=C_\rho(a(u)),\quad
+  D=D_\rho(a(u)),\quad
+  E=E_\rho(a(u)).
+\]
+If $[A:B:C:D:E]$ is undefined or $E=0$, reject $u$ and continue.
+
+\item \textbf{Construct the pentahedral quintic.}
+Use \eqref{eq:sigma-from-clebsch} to form
+\[
+  \sigma_1,\ldots,\sigma_5
+\]
+and then form the quintic $g(T)$ in \eqref{eq:penta-quintic}.  If $g$ is not
+separable, reject $u$ and continue.
+
+\item \textbf{Run the trace construction.}
+Construct
+\[
+  \cA_5=\QQ[T]/(g),
+\]
+choose a basis of the trace-zero subspace, and output the cubic form
+\[
+  F(X)=\Tr_{\cA_5/\QQ}\bigl(\theta\ell(X)^3\bigr).
+\]
+
+\item \textbf{Certify smoothness.}
+Check that the resulting cubic surface is smooth.  If it is singular, reject $u$
+and continue.  Otherwise return $F$.
+\end{enumerate}
+
+\subsection{Language-neutral pseudocode}
+
+\begin{lstlisting}
+function CubicSurfaceFromResolvent(f, labelled_G, rho, universal_data):
+    # Input:
+    #   f: separable polynomial over Q
+    #   labelled_G <= S_deg(f), identified with Gal(f)
+    #   rho: labelled_G -> W(E6)
+    # Output:
+    #   smooth cubic surface over Q realizing rho, if a candidate is found
+
+    V_action = restrict_Pinkham_representation(rho)
+
+    if root_permutation_module_has_rank_6_quotient(f, labelled_G, V_action):
+        Omega = root_set_of_f
+        q = choose_rank_6_intertwiner(Q^Omega -> V)
+    else:
+        Omega = line_27_G_set_via_rho
+        q = q_27
+
+    A_Omega = construct_resolvent_algebra(f, labelled_G, Omega)
+
+    s = equivariant_section(q)
+    e = s * q
+    e_rho = descend_idempotent_to_resolvent_algebra(e, A_Omega)
+
+    basis = basis_of_image(e_rho)      # six vectors b_1,...,b_6
+    basis = optional_LLL_reduce(basis)
+
+    for u in primitive_integer_vectors_by_height(6):
+        a = sum(u[i] * basis[i] for i in 1..6)
+
+        if descended_Delta_E(a) == 0:
+            continue
+
+        A, B, C, D, E = descended_Clebsch_values(a)
+        if weighted_point_is_invalid(A, B, C, D, E):
+            continue
+        if E == 0:
+            continue
+
+        sigmas = [B, D, (C^2 - A*E)/4, C*E, E^2]
+        g = T^5 - sigmas[1]*T^4 + sigmas[2]*T^3 \
+              - sigmas[3]*T^2 + sigmas[4]*T - sigmas[5]
+
+        if not is_separable(g):
+            continue
+
+        F = trace_cubic_from_quintic(g)
+
+        if is_smooth_cubic_surface(F):
+            return F
+
+    error("No candidate found in the searched height range")
+\end{lstlisting}
+
+\section{Correctness}
+
+\begin{theorem}[Correctness of the improved algorithm]
+Assume the universal data use compatible conventions for the $W(E_6)$ action on
+$\V$, the $27$ lines, and the normalized Coble gamma coordinates.  Assume also
+that the returned candidate lies in the standard open locus where the
+Clebsch--pentahedral reconstruction used in Algorithm A.10 recovers the unmarked
+cubic surface represented by the Clebsch point.  If the algorithm in
+\cref{sec:improved-algorithm} returns a cubic form $F$, then the surface
+$X=\{F=0\}\subset\PP^3_\QQ$ is a smooth cubic surface whose Galois action on the
+$27$ geometric lines is the prescribed representation $\rho$, up to the initial
+marking convention.  The optional final computation of the $27$ lines certifies
+this conclusion a posteriori.
+\end{theorem}
+
+\begin{proof}
+The source space used by the algorithm is
+\[
+  \im(e_\rho)\cong V_\rho=(L\otimes V)^G
+\]
+by \cref{eq:source-as-image}.  After base change to $L$, a rational source point
+becomes an ordinary vector $t\in V$ satisfying the twisted compatibility condition
+with respect to $\rho$.  The nonvanishing of $\Delta_{E_6,\rho}$ means that $t$ avoids
+the $E_6$ root hyperplanes, so the six cuspidal points are in general position and
+determine a marked smooth cubic surface over $L$.
+
+The descent condition on $t$ says precisely that applying a Galois element
+$g\in G$ to the marked surface is the same as changing the marking by
+$\rho(g)\in W(E_6)$.  Hence the associated Galois action on the marked line
+configuration is the one prescribed by $\rho$.
+
+The Clebsch quantities $A,B,C,D,E$ are $W(E_6)$-invariant.  Therefore their values
+on the twisted source point are fixed by $G$ and lie in $\QQ$.  These values are
+the unmarked moduli invariants of the cubic surface obtained over $L$.
+
+The pentahedral and trace construction from
+\eqref{eq:sigma-from-clebsch}--\eqref{eq:trace-cubic} constructs a cubic surface
+over $\QQ$ with the same Clebsch invariants.  On the open locus where the
+pentahedral construction is valid and the final smoothness check passes, this
+surface is the desired unmarked cubic surface.  Since the marked object over $L$
+descends with cocycle $\rho$, its line action is the prescribed one, up to the
+fixed convention identifying markings with the standard $E_6$ configuration.
+\end{proof}
+
+\begin{proposition}[Termination of exhaustive search]
+Assume the enumeration of primitive integer vectors in the chosen source lattice is
+exhaustive by height.  Then, outside the proper failure loci of the Coble/Clebsch
+and pentahedral constructions, the search eventually finds a valid point.
+\end{proposition}
+
+\begin{proof}
+Over $L$, the source map
+\[
+  \Aff^6\dashrightarrow \tcM
+\]
+coming from six points on the cuspidal cubic is dominant.  Twisting by the cocycle
+$\rho$ gives a dominant rational map
+\[
+  V_\rho\dashrightarrow \tcM_\rho.
+\]
+The source $V_\rho$ is a six-dimensional vector space over $\QQ$, so its rational
+points are Zariski dense.  The boundary $\DeltaE=0$, the locus $E=0$, the
+inseparability locus of the pentahedral quintic, and the singular-output locus are
+proper closed conditions on the source, provided one is not in a degenerate
+component of the construction.  Therefore rational points avoiding them are
+Zariski dense.  Exhaustive primitive enumeration must eventually meet this open
+set.  The argument gives no useful universal height bound.
+\end{proof}
+
+\section{Certification and debugging checks}
+
+A robust implementation should perform the following checks.
+
+\subsection{Universal checks}
+
+\begin{enumerate}
+\item Verify that the stored matrices for Pinkham's six-dimensional representation
+satisfy the Coxeter relations for $W(E_6)$.
+
+\item Verify that the $27$-line permutation action agrees with the action on the
+Picard lattice and that $q_{27}$ is $W(E_6)$-equivariant:
+\[
+  M_wq_{27}=q_{27}P_w.
+\]
+
+\item Verify the normalized gamma equivariance
+\[
+  \Gamhat(M_wt)=\widehat P_w\Gamhat(t)
+\]
+for the chosen generators and several random rational regular vectors $t$.
+
+\item Verify that the power-sum formulas \eqref{eq:clebsch} are invariant under the
+stored $W(E_6)$ action.
+
+\item Verify that the implementation sums over forty gamma labels, not over eighty
+signed labels.
+\end{enumerate}
+
+\subsection{Instance checks}
+
+\begin{enumerate}
+\item Verify that the labelled Galois group of $f$ has the declared order and acts
+on the roots in the declared way.
+
+\item If the root algebra is used, verify that the chosen intertwiner
+\[
+  \QQ^{\Omega_f}\to V
+\]
+has rank $6$ and satisfies \eqref{eq:intertwiner-equations} for the generators of
+$G$.
+
+\item If the $27$-line algebra is used, verify that the orbit resolvents have the
+expected degrees and are separable.
+
+\item Verify that the descended idempotent satisfies
+\[
+  e_\rho^2=e_\rho
+\]
+and that
+\[
+  \dim_\QQ\im(e_\rho)=6.
+\]
+
+\item For candidates, verify that
+\[
+  \Delta_{E_6,\rho}(a)\neq0
+\]
+before evaluating the higher-degree Clebsch functions.
+
+\item Verify that the computed Clebsch vector is not the zero weighted point and
+that $E\neq0$ before constructing the pentahedral quintic.
+
+\item Verify separability of the pentahedral quintic and smoothness of the final
+cubic surface.
+
+\item As an independent final certification, compute the $27$ lines of the output
+surface and compare the resulting Galois action with the prescribed representation
+$\rho$.
+\end{enumerate}
+
+\section{A staged implementation plan}
+
+The full resolvent implementation is the clean mathematical endpoint, but it need
+not be implemented all at once.
+
+\subsection{Stage 1: remove $B_\rho$}
+
+Keep the existing full-splitting-field construction of the six-dimensional matrix
+$D_\rho$, but delete the ten-dimensional point-search machinery.  For each
+primitive vector $u\in\ZZ^6$, form
+\[
+  t=D_\rho u\in L^6,
+\]
+check $\deltaE(t)\neq0$, evaluate the normalized gamma formulas, compute
+$A,B,C,D,E$, coerce these invariant values to $\QQ$, and run the pentahedral trace
+construction.  This tests the idea that the ten-dimensional descent is unnecessary.
+
+\subsection{Stage 2: try the root algebra}
+
+Before building any $27$-line resolvents, test whether the root permutation module
+of $f$ contains $V$ as a quotient.  If so, the algebra
+\[
+  \QQ[x]/(f)
+\]
+may already support the source descent.  This is the cheapest possible no-full-$L$
+model.
+
+\subsection{Stage 3: use the $27$-line resolvent}
+
+If the root algebra does not contain $V$, construct the $27$-line resolvent algebra
+and the descended idempotent $e_\rho$.  This gives a uniform degree-$27$ model of
+the twisted source.  The main technical work is implementing the descended linear
+maps and invariant evaluators without losing the relative labelling of orbit
+factors.
+
+\begin{summarybox}
+\textbf{Practical expectation.}
+Stage 1 should already be faster than the original ten-dimensional search.  Stage 2
+can be much faster when the given polynomial's root action already contains the
+six-dimensional representation.  Stage 3 is the robust general method for avoiding
+a full explicit $\QQ$-basis of the splitting field.
+\end{summarybox}
+
+\section{What remains expensive}
+
+The resolvent approach removes the need to do linear algebra in a vector space of
+dimension $[L:\QQ]=|G|$, but it does not make the arithmetic trivial.  The following
+steps may still be nontrivial.
+
+\begin{itemize}
+\item Constructing resolvent polynomials can be expensive if the chosen resolvent
+has large degree, large coefficients, or difficult stabilizer.
+
+\item If $\Omega$ has several orbits, the descended idempotent and invariant
+functions require correspondences between orbit factors, not merely independent
+polynomial fields.
+
+\item The Clebsch functions have high degree in the source coordinates.  Their
+values may have large numerators and denominators.  Modular evaluation and rational
+reconstruction may be preferable to direct symbolic expansion.
+
+\item The algorithm gives a dense supply of rational points but no small height
+bound.  LLL reduction and good source lattices remain important.
+\end{itemize}
+
+These are implementation costs inside degree $d$ or degree $27$ \'etale algebras,
+not costs inside the full splitting field of degree $|G|$.
+
+\section{Minimal final form of the algorithm}
+
+The mathematically compressed version is the following.
+
+\begin{enumerate}[label=\textbf{A\arabic*.}]
+\item From $f$ and the labelled group $G\leq S_{\deg f}$, regard
+$\Spec L\to\Spec\QQ$ as a $G$-torsor, without constructing $L$ as a
+$\QQ$-vector space.
+
+\item Restrict Pinkham's six-dimensional $W(E_6)$ representation along
+$\rho:G\to W(E_6)$.
+
+\item Choose a finite $G$-set $\Omega$ and a $G$-equivariant surjection
+$\QQ^\Omega\twoheadrightarrow V$.  Use the root set of $f$ if it passes the rank
+six intertwiner test; otherwise use the $27$-line set.
+
+\item Construct the associated resolvent algebra
+\[
+  \cA_\Omega=(L\otimes\QQ^\Omega)^G
+\]
+and the descended idempotent $e_\rho$ whose image is the twisted source
+$V_\rho$.
+
+\item Enumerate rational points of
+\[
+  V_\rho=\im(e_\rho).
+\]
+
+\item For each candidate, evaluate the descended invariant functions
+\[
+  \Delta_{E_6,\rho},\quad
+  A_\rho,B_\rho,C_\rho,D_\rho,E_\rho.
+\]
+Reject the candidate if it lies on the boundary or outside the valid pentahedral
+locus.
+
+\item Convert the Clebsch vector to a pentahedral quintic and then to a cubic form
+by the trace construction.
+
+\item Check smoothness and, for certification, verify the induced Galois action on
+the $27$ lines.
+\end{enumerate}
+
+\begin{thebibliography}{9}
+
+\bibitem{EJ}
+A.-S. Elsenhans and J. Jahnel,
+\emph{Moduli spaces and the inverse Galois problem for cubic surfaces},
+Trans. Amer. Math. Soc. \textbf{367} (2015), no.~11, 7837--7861;
+\href{https://arxiv.org/abs/1209.5591}{arXiv:1209.5591}.
+
+\bibitem{DR-PR}
+A. Duncan and Z. Reichstein,
+\emph{Pseudo-reflection groups and essential dimension},
+arXiv:1307.5724; see especially Lemma~6.1.
+
+\bibitem{DR-versality}
+A. Duncan and Z. Reichstein,
+\emph{Versality of algebraic group actions and rational points on twisted varieties},
+J. Algebraic Geom. \textbf{24} (2015), 499--530;
+\href{https://arxiv.org/abs/1109.6093}{arXiv:1109.6093}.
+
+\bibitem{Pinkham}
+H. Pinkham,
+\emph{R\'esolution simultan\'ee de points doubles rationnels},
+in \emph{S\'eminaire sur les singularit\'es des surfaces},
+Lecture Notes in Math. \textbf{777}, Springer, 1980, 179--203.
+
+\bibitem{Cohen}
+H. Cohen,
+\emph{A Course in Computational Algebraic Number Theory},
+Graduate Texts in Mathematics \textbf{138}, Springer, 1993.
+
+\bibitem{Stauduhar}
+R. P. Stauduhar,
+\emph{The determination of Galois groups},
+Math. Comp. \textbf{27} (1973), 981--996.
+
+\bibitem{EJcode}
+J. Jahnel,
+\emph{c9\_example.m: Magma example for Algorithm 5.1},
+authors' supplementary webpage,
+\url{https://wwwuser.gwdguser.de/~jjahnel/Arbeiten/Kub_Fl/c9_example.m}.
+
+\end{thebibliography}
+
+\end{document}
