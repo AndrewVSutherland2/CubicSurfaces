@@ -232,6 +232,7 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
                                                    Iso := false,
                                                    Prec := 900,
                                                    HeightBound := 1,
+                                                   SampleCap := 1500,
                                                    MaxSurfaces := 10,
                                                    SplitPrimeBound := 200000,
                                                    MaxPrimTries := 60,
@@ -283,28 +284,54 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
     end function;
 
     /* per-orbit resolvent generator x_ell: theta_{l0} = sum_{h in Stab} h(theta_0),
-       theta_0 a generic combination of degree-1 and (mixed) degree-2 monomials in the
-       roots (transitive-stabiliser orbits can kill all power sums, so mixed products
-       are needed); x_ell = (coset rep)(theta).  Require x_ell distinct mod p. */
-    mons := [ [i] : i in [1..d] ] cat [ [i,j] : i,j in [1..d] | i le j ]
-            cat [ [i,j,k] : i,j,k in [1..d] | i le j and j le k ];
-    buildX := function(co)
-        ap := func< g, R | &+[ co[t]*&*[ R[v^g] : v in mons[t] ] : t in [1..#mons] ] >;
-        tv := func< Hs, g, R | &+[ ap(h*g, R) : h in Hs ] >;
-        xp := [ Rp!0 : i in [1..27] ]; oo := [ 0 : i in [1..27] ];
-        for oi in [1..#orbs] do o := orbs[oi];
-            l0 := o[1]; Hs := [ g : g in Pelts | l0^(act(g)) eq l0 ];
-            gell := AssociativeArray();
-            for g in Pelts do ell := l0^(act(g)); if not IsDefined(gell,ell) then gell[ell]:=g; end if; end for;
-            for ell in o do xp[ell] := tv(Hs, gell[ell], rts); oo[ell] := oi; end for;
+       theta_0 a generic combination of monomials in the roots; x_ell = (coset
+       rep)(theta).  Require x_ell distinct within each orbit.  A transitive
+       stabiliser can kill all low-degree power sums (e.g. orbit structure
+       [1,2,8,16] needs mixed degree-4 products), so escalate the monomial degree
+       until separation is achieved.  The stabiliser/coset data below depends only
+       on the group action, not on the roots or coefficients. */
+    stabOf := []; cosetRep := [];
+    for oi in [1..#orbs] do o := orbs[oi]; l0 := o[1];
+        Hs := [ g : g in Pelts | l0^(act(g)) eq l0 ];
+        gell := AssociativeArray();
+        for g in Pelts do ell := l0^(act(g)); if not IsDefined(gell,ell) then gell[ell]:=g; end if; end for;
+        Append(~stabOf, Hs); Append(~cosetRep, gell);
+    end for;
+    MonsUpTo := function(D)
+        ms := [ [i] : i in [1..d] ];
+        if D ge 2 then ms cat:= [ [i,j] : i,j in [1..d] | i le j ]; end if;
+        if D ge 3 then ms cat:= [ [i,j,k] : i,j,k in [1..d] | i le j and j le k ]; end if;
+        if D ge 4 then ms cat:= [ [i,j,k,l] : i,j,k,l in [1..d] | i le j and j le k and k le l ]; end if;
+        if D ge 5 then ms cat:= [ [i,j,k,l,m] : i,j,k,l,m in [1..d] | i le j and j le k and k le l and l le m ]; end if;
+        return ms;
+    end function;
+    buildX := function(R, mons, co, thresh)
+        ap := func< g | &+[ co[t]*&*[ R[v^g] : v in mons[t] ] : t in [1..#mons] ] >;
+        Ru := Universe(R);
+        xp := [ Ru!0 : i in [1..27] ]; oo := [ 0 : i in [1..27] ];
+        for oi in [1..#orbs] do Hs := stabOf[oi]; gell := cosetRep[oi];
+            for ell in orbs[oi] do g := gell[ell]; xp[ell] := &+[ ap(h*g) : h in Hs ]; oo[ell] := oi; end for;
         end for;
-        sep := &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) lt Prec div 2 : i,jj in [1..#o]|i lt jj ] : o in orbs | #o gt 1 ];
+        sep := &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) lt thresh : i,jj in [1..#o]|i lt jj ] : o in orbs | #o gt 1 ];
         return xp, oo, sep;
     end function;
-    xpad := []; orbOf := []; tries := 0;
-    repeat tries +:= 1; error if tries gt MaxPrimTries, "no separable primitive element";
-           xpad, orbOf, sep := buildX([ Random([1..4]) : t in [1..#mons] ]);
-    until sep;
+    /* search a separating combination cheaply at low precision, escalating degree,
+       then rebuild it at full precision */
+    rtsLo := [ GaloisRoot(i, S : Prec := 80) : i in [1..d] ];
+    RpLo  := FieldOfFractions(Universe(rtsLo)); rtsLo := [ RpLo ! x : x in rtsLo ];
+    xpad := []; orbOf := []; usemons := []; usco := []; gotco := false; usedeg := 0;
+    for D in [3..5] do
+        mons := MonsUpTo(D);
+        for tries in [1..MaxPrimTries] do
+            co := [ Random([1..6]) : t in [1..#mons] ];
+            _, _, sep := buildX(rtsLo, mons, co, 40);
+            if sep then usemons := mons; usco := co; usedeg := D; gotco := true; break; end if;
+        end for;
+        if gotco then break; end if;
+    end for;
+    error if not gotco, "no separable primitive element (up to degree 5)";
+    if Print then printf "primitive element: degree-<=%o monomials\n", usedeg; end if;
+    xpad, orbOf, _ := buildX(rts, usemons, usco, Prec div 2);
 
     /* polredbest -> condition the resolvent fields (x_ell <- beta(x_ell)) */
     Px := PolynomialRing(Q);
@@ -358,23 +385,52 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
         return true, out;
     end function;
 
-    /* enumerate small source points; keep the smallest smooth surface */
-    if Print then printf "enumerating source points (height <= %o)...\n", HeightBound; end if;
+    /* Search source points by increasing height h = 1..HeightBound, keeping the
+       smallest smooth surface.  The shell {u : max|u_i| = h, gcd(u) = 1} grows
+       like (2h+1)^6, so test at most SampleCap points per shell (a random
+       subsample of the larger shells).  Sweeping low heights first favours
+       smaller surfaces, and -- unlike a single top-shell scan -- never skips a
+       height where a smooth surface is easy to find. */
+    if Print then printf "enumerating source points (height <= %o, <= %o per shell)...\n",
+        HeightBound, SampleCap; end if;
     cands := [];
-    for u in CartesianPower([-HeightBound..HeightBound], 6) do
-        uu := [u[i]:i in [1..6]];
-        if Max([Abs(x):x in uu]) ne HeightBound or GCD(uu) ne 1 then continue; end if;
-        ac := [ &+[ uu[r]*B6[r][ci] : r in [1..6] ] : ci in [1..27] ];
-        ok, inv := clebschOf(ac);
-        if not ok or inv[5] eq 0 then continue; end if;
-        pol5 := ClebschInvariantsToPentahedralPolynomial(inv);
-        if Discriminant(pol5) eq 0 then continue; end if;
-        gl := penta_pol_2_gl(pol5);
-        if not IsSmoothCubicSurface(gl) then continue; end if;
-        Append(~cands, <Max([Abs(c):c in Coefficients(gl)]), gl, inv, uu>);
+    for h in [1..HeightBound] do
+        pts := [];
+        if (2*h+1)^6 le 8*SampleCap then                 // small shell: take it all
+            allp := [];
+            for u in CartesianPower([-h..h], 6) do
+                uu := [u[i]:i in [1..6]];
+                if Max([Abs(x):x in uu]) eq h and GCD(uu) eq 1 then Append(~allp, uu); end if;
+            end for;
+            if #allp le SampleCap then pts := allp;
+            else pts := [ allp[Random(1,#allp)] : i in [1..SampleCap] ]; end if;
+        else                                             // huge shell: random subsample
+            seen := {}; att := 0;
+            while #pts lt SampleCap and att lt 40*SampleCap do
+                att +:= 1;
+                uu := [ Random(-h,h) : i in [1..6] ];
+                if Max([Abs(x):x in uu]) eq h and GCD(uu) eq 1 and uu notin seen then
+                    Include(~seen, uu); Append(~pts, uu);
+                end if;
+            end while;
+        end if;
+        for uu in pts do
+            ac := [ &+[ uu[r]*B6[r][ci] : r in [1..6] ] : ci in [1..27] ];
+            ok, inv := clebschOf(ac);
+            if ok and inv[5] ne 0 then
+                pol5 := ClebschInvariantsToPentahedralPolynomial(inv);
+                if Discriminant(pol5) ne 0 then
+                    gl := penta_pol_2_gl(pol5);
+                    if IsSmoothCubicSurface(gl) then
+                        Append(~cands, <Max([Abs(c):c in Coefficients(gl)]), gl, inv, uu>);
+                    end if;
+                end if;
+            end if;
+            if #cands ge MaxSurfaces then break; end if;
+        end for;
         if #cands ge MaxSurfaces then break; end if;
     end for;
-    error if #cands eq 0, "no smooth surface found at this height (raise HeightBound, or Prec)";
+    error if #cands eq 0, "no smooth surface found up to this height (raise HeightBound, or Prec)";
     Sort(~cands, func< a,b | a[1] - b[1] >);
     best := cands[1];
     if Print then printf "%o smooth surface(s); smallest has %o-digit coefficients\n",
