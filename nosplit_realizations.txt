@@ -4,9 +4,11 @@
 # because |Gal| is too large to build the splitting field directly.
 #
 # Each entry is an existence certificate: there is an explicit smooth cubic surface
-# over Q whose 27 lines carry the prescribed Galois action.  The surface itself has
-# very large, NON-minimized coefficients (see max_coef_digits) and is not stored
-# here; regenerate it from the source polynomial with
+# over Q whose 27 lines carry the prescribed Galois action.  This file is a compact
+# INDEX; the full surfaces (very large, NON-minimized coefficients -- see
+# max_coef_digits) are in database_seed_nosplit.txt, and are browsable in
+# seed_database_nosplit.html.  A surface can also be regenerated from its source
+# polynomial with
 #     CubicSurfaceNoSplittingField(G, f)      f = sum_i source_coeffs[i] * t^i
 # (G = the W(E6) subgroup for this label, from WE6subgroups.txt).
 #

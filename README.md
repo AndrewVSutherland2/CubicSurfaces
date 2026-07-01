@@ -1,6 +1,8 @@
 # CubicSurfaces
 
 > 🔎 **[Browse the seed database of cubic surfaces →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database.html)** &nbsp;—&nbsp; 902 explicit smooth cubic surfaces over `Q` across 58 conjugacy classes of `W(E6)` subgroups: searchable, with rendered equations, LMFDB links for the number fields, and copy‑to‑Magma buttons.
+>
+> 🔎 **[Browse the no-splitting-field classes →](https://andrewvsutherland2.github.io/CubicSurfaces/seed_database_nosplit.html)** &nbsp;—&nbsp; 182 more classes (group orders up to 1920) reached without building the splitting field: large existence-certificate surfaces with the source field, 27-line orbit structure, and mod-`q` Frobenius certification.
 
 A [Magma](http://magma.maths.usyd.edu.au/) implementation of **Elsenhans–Jahnel
 Algorithm 5.1** ([arXiv:1209.5591](https://arxiv.org/abs/1209.5591), *On the
@@ -313,9 +315,10 @@ number field, keyed by its Polredabs coefficient list); refresh it from the LMFD
   reasons (a trivial-group degeneracy, five orbit structures with no separable
   primitive element up to degree 5, two order-24 twists that degenerated to
   generic surfaces, and one d=10 class whose primitive-element search does not
-  complete in practical time). The realized surfaces are large and non-minimized —
-  regenerate any of them from its source polynomial with
-  `CubicSurfaceNoSplittingField(G, f)`.
+  complete in practical time). The full surfaces (large and non-minimized) are in
+  `database_seed_nosplit.txt` and browsable in `seed_database_nosplit.html`
+  (search / order-filter / copy-to-Magma, LMFDB-linked); each is also regenerable
+  from its source polynomial with `CubicSurfaceNoSplittingField(G, f)`.
 - **Open: small explicit models for "large-Clebsch" twists.** The difficulty of
   producing a *small* explicit equation is governed by the twist's
   Clebsch-invariant height (set by the descent basis), not the field degree.
