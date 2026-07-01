@@ -199,11 +199,17 @@ end function;
 /* ------------------------------------------------------------------------- */
 
 PolredbestResolvents := function(polys, tmpdir)
-    gpin := "";
+    /* PARI's default 8 MB stack is fixed (parisizemax=0); polredbest on the
+       degree-8/9 resolvents overflows it and prints nothing.  Start at 512 MB
+       and let the stack grow to 4 GB, and wrap each polredbest in iferr so a
+       hard failure falls back to the un-reduced polynomial (identity map) rather
+       than aborting the whole batch of factors. */
+    gpin := "default(parisize,\"512M\"); default(parisizemax,\"4G\");\n";
     for T in polys do
         cs := Coefficients(T);          // constant-first; Polrev([c0,c1,..]) = sum c_i x^i
         cstr := &cat[ Sprint(cs[i]) cat (i lt #cs select "," else "") : i in [1..#cs] ];
-        gpin cat:= "pol=Polrev([" cat cstr cat "]); v=polredbest(pol,1); "
+        gpin cat:= "pol=Polrev([" cat cstr cat "]); "
+                 cat "v=iferr(polredbest(pol,1),ERR,[pol,Mod(x,pol)]); "
                  cat "print(Vec(v[1])); print(Vec(lift(modreverse(v[2]))));\n";
     end for;
     PrintFile(tmpdir cat "/nosplit_pr.gp", gpin cat "quit\n" : Overwrite);
