@@ -263,8 +263,9 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
         splitp, Order(P), [#o : o in orbs]; end if;
 
     p := splitp;
-    rts := [ GaloisRoot(i, S : Prec := Prec) : i in [1..d] ];
-    Rp  := Universe(rts);
+    rts0 := [ GaloisRoot(i, S : Prec := Prec) : i in [1..d] ];
+    Rp   := FieldOfFractions(Universe(rts0));   // p-adic FIELD: Vandermonde inverts even
+    rts  := [ Rp ! x : x in rts0 ];             // when x_ell collide mod p (non-unit det)
 
     recon := function(z)                       // p-adic -> rational (split prime: Rp = Z_p)
         comps := Eltseq(z);
@@ -279,7 +280,8 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
        theta_0 a generic combination of degree-1 and (mixed) degree-2 monomials in the
        roots (transitive-stabiliser orbits can kill all power sums, so mixed products
        are needed); x_ell = (coset rep)(theta).  Require x_ell distinct mod p. */
-    mons := [ [i] : i in [1..d] ] cat [ [i,j] : i,j in [1..d] | i lt j ];
+    mons := [ [i] : i in [1..d] ] cat [ [i,j] : i,j in [1..d] | i le j ]
+            cat [ [i,j,k] : i,j,k in [1..d] | i le j and j le k ];
     buildX := function(co)
         ap := func< g, R | &+[ co[t]*&*[ R[v^g] : v in mons[t] ] : t in [1..#mons] ] >;
         tv := func< Hs, g, R | &+[ ap(h*g, R) : h in Hs ] >;
@@ -290,7 +292,7 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
             for g in Pelts do ell := l0^(act(g)); if not IsDefined(gell,ell) then gell[ell]:=g; end if; end for;
             for ell in o do xp[ell] := tv(Hs, gell[ell], rts); oo[ell] := oi; end for;
         end for;
-        sep := &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) eq 0 : i,jj in [1..#o]|i lt jj ] : o in orbs | #o gt 1 ];
+        sep := &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) lt Prec div 2 : i,jj in [1..#o]|i lt jj ] : o in orbs | #o gt 1 ];
         return xp, oo, sep;
     end function;
     xpad := []; orbOf := []; tries := 0;
@@ -311,7 +313,7 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
         bjR := ChangeRing(red[t][2], Rp);
         for ell in orbs[multi[t]] do xpad[ell] := Evaluate(bjR, xpad[ell]); end for;
     end for;
-    error if not &and[ &and[ Valuation(xpad[o[i]]-xpad[o[jj]]) eq 0 : i,jj in [1..#o]|i lt jj] : o in orbs|#o gt 1 ],
+    error if not &and[ &and[ Valuation(xpad[o[i]]-xpad[o[jj]]) lt Prec div 2 : i,jj in [1..#o]|i lt jj] : o in orbs|#o gt 1 ],
         "polredbest collapsed roots mod p -- re-run";
     if Print then printf "applied polredbest to %o resolvent field(s)\n", #multi; end if;
 
