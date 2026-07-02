@@ -49,7 +49,8 @@ Q := RationalField();
 Resolvent27RF := recformat< q27, idem, lineperms, phi27, bridge >;
 NoSplitResultRF := recformat<
     surface, surface_unreduced, invariants, source_u, prime,
-    orbit_sizes, galois_group, subgroup, universal >;
+    orbit_sizes, galois_group, subgroup, universal,
+    all_candidates >;   // every smooth candidate found: <maxcoef, gl, inv, u>
 
 /* ------------------------------------------------------------------------- */
 /* Universal 27-line data: q27 : Q^27 ->> V matched to Pinkham's six-dim rep, */
@@ -238,6 +239,7 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
                                                    SplitPrimeBound := 200000,
                                                    MaxPrimTries := 60,
                                                    TmpDir := ".",
+                                                   InvariantsOnly := false,
                                                    Print := true)
     U  := Universal;    if Type(U)  eq BoolElt then U  := BuildUniversalCobleData(: Print := Print); end if;
     RD := Resolvent27;  if Type(RD) eq BoolElt then RD := BuildResolvent27Data(U : Print := Print); end if;
@@ -298,6 +300,17 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
         for g in Pelts do ell := l0^(act(g)); if not IsDefined(gell,ell) then gell[ell]:=g; end if; end for;
         Append(~stabOf, Hs); Append(~cosetRep, gell);
     end for;
+    /* Size-2 orbits whose stabiliser is the even-permutation kernel of the
+       root action cannot be separated by monomial traces of low degree: the
+       coset difference of ANY polynomial of degree < d(d-1)/2 is alternating,
+       hence divisible by the Vandermonde, hence identically zero below its
+       degree (this is what blocked the [2,5,10,10] S5-type classes).  But the
+       Vandermonde VALUE delta = prod_{i<j}(alpha_i - alpha_j) is itself the
+       canonical primitive element: Stab-equivariant through the sign
+       character, and automatically nonzero mod p at a totally split prime.  */
+    sign2 := { oi : oi in [1..#orbs] |
+               #orbs[oi] eq 2 and forall{ h : h in stabOf[oi] | IsEven(h) }
+               and IsOdd(cosetRep[oi][orbs[oi][2]]) };
     MonsUpTo := function(D)                          // all non-decreasing index tuples of length 1..D
         cur := [ [i] : i in [1..d] ]; ms := cur;
         for len in [2..D] do
@@ -331,8 +344,10 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
         return T;
     end function;
     combine := func< co, T | [ &+[ co[t]*T[ell][t] : t in [1..#co] ] : ell in [1..27] ] >;
-    isSep   := func< xp, thr | &and[ &and[ Valuation(xp[o[i]]-xp[o[jj]]) lt thr : i,jj in [1..#o]|i lt jj ]
-                                     : o in orbs | #o gt 1 ] >;
+    isSep   := func< xp, thr | &and[ Booleans() |
+                       &and[ Valuation(xp[orbs[oi][i]]-xp[orbs[oi][jj]]) lt thr
+                             : i,jj in [1..#orbs[oi]] | i lt jj ]
+                       : oi in [1..#orbs] | #orbs[oi] gt 1 and oi notin sign2 ] >;
     /* search a separating combination cheaply at low precision, escalating degree,
        then rebuild it at full precision */
     rtsLo := [ GaloisRoot(i, S : Prec := 80) : i in [1..d] ];
@@ -350,6 +365,13 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
     error if not gotco, Sprintf("no separable primitive element (up to degree %o)", MaxMonDegree);
     if Print then printf "primitive element: degree-<=%o monomials\n", usedeg; end if;
     xpad := combine(usco, TraceMonVecs(rts, usemons));       // rebuild at full precision
+    if #sign2 gt 0 then
+        delta := &*[ rts[i] - rts[j] : i, j in [1..d] | i lt j ];
+        for oi in sign2 do
+            xpad[orbs[oi][1]] := delta; xpad[orbs[oi][2]] := -delta;
+        end for;
+        if Print then printf "sign-character (Vandermonde) element for %o size-2 orbit(s)\n", #sign2; end if;
+    end if;
 
     /* polredbest -> condition the resolvent fields (x_ell <- beta(x_ell)) */
     Px := PolynomialRing(Q);
@@ -436,11 +458,21 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
             ac := [ &+[ uu[r]*B6[r][ci] : r in [1..6] ] : ci in [1..27] ];
             ok, inv := clebschOf(ac);
             if ok and inv[5] ne 0 then
-                pol5 := ClebschInvariantsToPentahedralPolynomial(inv);
-                if Discriminant(pol5) ne 0 then
-                    gl := penta_pol_2_gl(pol5);
-                    if IsSmoothCubicSurface(gl) then
-                        Append(~cands, <Max([Abs(c):c in Coefficients(gl)]), gl, inv, uu>);
+                if InvariantsOnly then
+                    /* smooth <=> the Salmon-Edge discriminant of the invariants
+                       is nonzero -- no need to build the (huge) raw model */
+                    dcl := inv[1]^4 - 128*inv[1]^2*inv[2] + 4096*inv[2]^2
+                           - 2048*inv[1]*inv[3] - 16384*inv[4];
+                    if dcl ne 0 and Discriminant(ClebschInvariantsToPentahedralPolynomial(inv)) ne 0 then
+                        Append(~cands, <Max([Abs(Numerator(c)) : c in inv]), 0, inv, uu>);
+                    end if;
+                else
+                    pol5 := ClebschInvariantsToPentahedralPolynomial(inv);
+                    if Discriminant(pol5) ne 0 then
+                        gl := penta_pol_2_gl(pol5);
+                        if IsSmoothCubicSurface(gl) then
+                            Append(~cands, <Max([Abs(c):c in Coefficients(gl)]), gl, inv, uu>);
+                        end if;
                     end if;
                 end if;
             end if;
@@ -457,7 +489,8 @@ CubicSurfaceNoSplittingField := function(Gwe6, f : Universal := false,
     return rec< NoSplitResultRF |
         surface := best[2], surface_unreduced := best[2], invariants := best[3],
         source_u := best[4], prime := splitp, orbit_sizes := [#o : o in orbs],
-        galois_group := P, subgroup := Gwe6, universal := U >;
+        galois_group := P, subgroup := Gwe6, universal := U,
+        all_candidates := cands >;
 end function;
 
 /* ------------------------------------------------------------------------- */
